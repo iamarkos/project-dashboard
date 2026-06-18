@@ -3,7 +3,9 @@
 ## Scope
 * Management of projects (creation, metadata tracking, and ownership).
 * Control of documents within projects (uploading, downloading, and associating with specific projects).
-* Handling of user authentication and project access control via specific participant roles.
+* Handling of user authentication and project access control via specific participant roles:
+  * **Owner:** Full access (creator of the project, can do anything).
+  * **Participant:** User invited to the project, can modify, cannot delete.
 
 ## Architecture & Choices
 * **Database:** PostgreSQL. Structured in 3NF (e.g., extracting participant roles into a dedicated `roles` enum table).
@@ -83,7 +85,7 @@ Create a new project. The creator is automatically assigned the "Owner" role.
   "id": 101,
   "title": "Alpha Migration",
   "description": "Server migration planning.",
-  "owner_id": 1,
+  "created_by": 1,
   "created_at": "2026-06-18T10:00:00Z"
 }
 ```
@@ -104,13 +106,13 @@ Update specific fields of an existing project.
   "id": 101,
   "title": "Alpha Migration",
   "description": "Updated server migration planning scope.",
-  "owner_id": 1,
+  "created_by": 1,
   "created_at": "2026-06-18T10:00:00Z"
 }
 ```
 **Errors:**
 * `404` Project not found.
-* `403` Forbidden (Requires Owner or Editor role).
+* `403` Forbidden (Requires Owner or Participant role).
 
 ### POST /projects/{id}/documents
 Upload a new document to a specific project.
@@ -123,8 +125,8 @@ Upload a new document to a specific project.
   "project_id": 101,
   "filename": "migration_architecture.pdf",
   "file_path": "/uploads/101/migration_architecture.pdf",
-  "uploaded_by": 1,
-  "uploaded_at": "2026-06-18T10:05:00Z"
+  "created_by": 1,
+  "created_at": "2026-06-18T10:05:00Z"
 }
 ```
 **Errors:**
@@ -138,16 +140,17 @@ Grant another user access to the project by assigning them a specific role.
 ```json
 {
   "user_id": 2,
-  "role_id": 3 
+  "role_id": 2 
 }
 ```
-*(Note: role_id 3 corresponds to the 'Viewer' enum)*
+*(Note: role_id 2 corresponds to the 'Participant' enum)*
 **Response (200 OK):**
 ```json
 {
   "project_id": 101,
   "user_id": 2,
-  "role": "Viewer"
+  "role_id": 2,
+  "role_name": "Participant"
 }
 ```
 **Errors:**
