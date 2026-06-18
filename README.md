@@ -1,37 +1,155 @@
 # Project Management Dashboard API
 
-## Implementation Plan
-Proceeding with a **Columnar approach**:
-1. Authentication (JWT, User Models)
-2. Project Endpoints (CRUD, assigning Owner)
-3. Document Endpoints (Upload/Download, checking Project access)
-4. Sharing & Access Control (Participant roles)
+## Scope
+* Management of projects (creation, metadata tracking, and ownership).
+* Control of documents within projects (uploading, downloading, and associating with specific projects).
+* Handling of user authentication and project access control via specific participant roles.
 
 ## Architecture & Choices
-* **Database:** PostgreSQL.
-* **ORM:** SQLAlchemy 2.0 (using Repository Pattern for "with and without ORM").
+* **Database:** PostgreSQL. Structured in 3NF (e.g., extracting participant roles into a dedicated `roles` enum table).
+* **ORM & DB Access:** SQLAlchemy 2.0. Database communication will be encapsulated within a Singleton class inside the `services/` directory to act as the sole interface between the FastAPI routes and the database.
 * **Auth:** FastAPI `OAuth2PasswordBearer`, JWT (PyJWT), and password hashing via `passlib` (bcrypt).
-* **Files:** Saved locally, paths stored in DB.
+* **Files:** Stored locally via Docker-compose volume mapping to ensure persistence. File metadata and paths are stored in the database.
 
-## API Specification
+## API Summary
 
-### Auth
-* `POST /auth` - Create user.
-* `POST /login` - Get JWT.
+| Method | Path | Description |
+|---|---|---|
+| POST | `/auth/register` | Create a new user account |
+| POST | `/auth/login` | Authenticate and retrieve JWT |
+| GET | `/projects` | List all projects accessible to the user |
+| POST | `/projects` | Create a new project (sets user as owner) |
+| GET | `/projects/{id}` | Retrieve detailed information for a specific project |
+| PATCH| `/projects/{id}` | Update project metadata |
+| DELETE | `/projects/{id}` | Remove a project and its documents (Owner only) |
+| GET | `/projects/{id}/documents` | List all documents attached to a project |
+| POST | `/projects/{id}/documents` | Upload a new document to a project |
+| GET | `/documents/{id}` | Download a specific document |
+| DELETE | `/documents/{id}` | Delete a specific document |
+| POST | `/projects/{id}/invite` | Grant another user access to the project |
 
-### Projects
-* `GET /projects` - List accessible projects.
-* `POST /projects` - Create project (sets user as owner).
-* `GET /project/{id}/info` - Get details.
-* `PUT /project/{id}/info` - Update details.
-* `DELETE /project/{id}` - Delete project (owner only).
+---
 
-### Documents
-* `GET /project/{id}/documents` - List documents.
-* `POST /project/{id}/documents` - Upload document(s).
-* `GET /document/{id}` - Download document.
-* `PUT /document/{id}` - Update document.
-* `DELETE /document/{id}` - Delete document.
+## Detailed API Specification
 
-### Sharing
-* `POST /project/{id}/invite?user={login}` - Grant participant access.
+### POST /auth/register
+Create a new user account.
+**Request:**
+```json
+{
+  "username": "jdoe",
+  "email": "jdoe@example.com",
+  "password": "securepassword123"
+}
+```
+**Response (201 Created):**
+```json
+{
+  "id": 1,
+  "username": "jdoe",
+  "email": "jdoe@example.com"
+}
+```
+**Errors:**
+* `400` Username or Email already exists.
+* `422` Validation Error (e.g., weak password).
+
+### POST /auth/login
+Authenticate user credentials and issue a JWT.
+**Request (Form Data):**
+`username=jdoe&password=securepassword123`
+**Response (200 OK):**
+```json
+{
+  "access_token": "eyJhbGciOiJIUzI1NiIsInR5c...",
+  "token_type": "bearer"
+}
+```
+**Errors:**
+* `401` Incorrect username or password.
+
+### POST /projects
+Create a new project. The creator is automatically assigned the "Owner" role.
+**Request:**
+```json
+{
+  "title": "Alpha Migration",
+  "description": "Server migration planning."
+}
+```
+**Response (201 Created):**
+```json
+{
+  "id": 101,
+  "title": "Alpha Migration",
+  "description": "Server migration planning.",
+  "owner_id": 1,
+  "created_at": "2026-06-18T10:00:00Z"
+}
+```
+**Errors:**
+* `401` Unauthorized (Missing or invalid JWT).
+
+### PATCH /projects/{id}
+Update specific fields of an existing project.
+**Request - partial update:**
+```json
+{
+  "description": "Updated server migration planning scope."
+}
+```
+**Response (200 OK):**
+```json
+{
+  "id": 101,
+  "title": "Alpha Migration",
+  "description": "Updated server migration planning scope.",
+  "owner_id": 1,
+  "created_at": "2026-06-18T10:00:00Z"
+}
+```
+**Errors:**
+* `404` Project not found.
+* `403` Forbidden (Requires Owner or Editor role).
+
+### POST /projects/{id}/documents
+Upload a new document to a specific project.
+**Request (Multipart/Form-Data):**
+`file: [binary_data]`
+**Response (201 Created):**
+```json
+{
+  "id": 505,
+  "project_id": 101,
+  "filename": "migration_architecture.pdf",
+  "file_path": "/uploads/101/migration_architecture.pdf",
+  "uploaded_by": 1,
+  "uploaded_at": "2026-06-18T10:05:00Z"
+}
+```
+**Errors:**
+* `404` Project not found.
+* `403` Forbidden (Insufficient permissions).
+* `413` Payload Too Large (File size limit exceeded).
+
+### POST /projects/{id}/invite
+Grant another user access to the project by assigning them a specific role.
+**Request:**
+```json
+{
+  "user_id": 2,
+  "role_id": 3 
+}
+```
+*(Note: role_id 3 corresponds to the 'Viewer' enum)*
+**Response (200 OK):**
+```json
+{
+  "project_id": 101,
+  "user_id": 2,
+  "role": "Viewer"
+}
+```
+**Errors:**
+* `404` Project or User not found.
+* `403` Forbidden (Only Owners can invite participants).
