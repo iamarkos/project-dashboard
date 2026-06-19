@@ -1,7 +1,20 @@
 from fastapi import FastAPI
+from app.db.database import engine, Base
+from app.models import models
 
-app = FastAPI()
+# Import your new router
+from app.routers import users
+
+Base.metadata.create_all(bind=engine)
+
+app = FastAPI(
+    title="Project Management Dashboard API",
+    description="API for managing projects."
+)
+
+# Plug the router into the main application
+app.include_router(users.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "Dashboard API is running!"}
+    return {"status": "success", "message": "API and Database are successfully connected!"}

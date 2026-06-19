@@ -11,7 +11,23 @@
 * **Database:** PostgreSQL. Structured in 3NF (e.g., extracting participant roles into a dedicated `roles` enum table).
 * **ORM & DB Access:** SQLAlchemy 2.0. Database communication will be encapsulated within a Singleton class inside the `services/` directory to act as the sole interface between the FastAPI routes and the database.
 * **Auth:** FastAPI `OAuth2PasswordBearer`, JWT (PyJWT), and password hashing via `passlib` (bcrypt).
-* **Files:** Stored locally via Docker-compose volume mapping to ensure persistence. File metadata and paths are stored in the database.
+* **Files:** Object storage managed via MinIO (S3-compatible API) running in a Docker container, architected for a seamless future migration to AWS S3. File metadata is tracked in the database.
+
+## Quick Start (Local Development)
+
+This project is fully containerized. You do not need to install Python or PostgreSQL on your local machine to run it.
+
+**1. Setup Environment Variables**
+Copy the example environment file and fill in your local values (or leave the defaults for testing):
+`cp .env.example .env`
+
+**2. Boot the Architecture**
+Ensure the Docker daemon is running, then start the API, Database, and MinIO storage containers:
+`docker compose up -d --build`
+
+**3. Access the Services**
+* **API Interactive Docs (Swagger):** `http://127.0.0.1:8000/docs`
+* **MinIO Storage Dashboard:** `http://127.0.0.1:9001`
 
 ## API Summary
 
