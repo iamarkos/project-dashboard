@@ -1,11 +1,19 @@
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
+from sqlalchemy import func
 
 from app.db.database import SessionLocal
-from app.models.models import Project, ProjectParticipant, Role, User
+from app.models.models import Project, ProjectParticipant, Role, User, Document
 from app.schemas.schemas import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse
 from app.dependencies import get_current_user, get_db
+from app.services.storage import upload_file_to_storage
+from app.core.config import settings
+
+# Load the limit from .env, default to 10MB if not provided
+MAX_PROJECT_SIZE_BYTES = settings.MAX_PROJECT_SIZE_MB * 1024 * 1024
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
@@ -215,3 +223,64 @@ def invite_user_to_project(
         role_id=invite_in.role_id,
         role_name=str(role.name)
     )
+
+@router.post("/{project_id}/documents")
+def upload_document_to_project(
+    project_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is a participant of the project
+    participant = (
+        db.query(ProjectParticipant)
+        .filter(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a participant of the project to upload documents."
+        )
+
+    # Read the file size in bytes
+    file.file.seek(0, 2)  # Move cursor to the end of the file
+    file_size = file.file.tell()  # Get the byte position (which equals the size)
+    file.file.seek(0)  # Reset cursor back to the beginning for the upload stream
+
+    # SIZE LIMIT CHECK
+    current_total_size = db.query(func.sum(Document.file_size)).filter(
+        Document.project_id == project_id
+    ).scalar() or 0  # .scalar() returns the single value, defaults to 0 if no files exist
+
+    if current_total_size + file_size > MAX_PROJECT_SIZE_BYTES:
+        # Calculate the MB values dynamically for the error message
+        max_mb = settings.MAX_PROJECT_SIZE_MB
+        current_mb = current_total_size / (1024 * 1024)
+        
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Upload rejected. Project storage limit is {max_mb}MB. Current usage: {current_mb:.2f}MB."
+        )
+
+    # Upload the file to storage (MinIO)
+    filename = file.filename or "unnamed_document.bin"
+    file_path = upload_file_to_storage(file.file, filename)
+
+    # Create a new Document entry in the database
+    new_document = Document(
+        project_id=project_id,
+        created_by=current_user.id,
+        filename=filename,
+        file_path=file_path,
+        file_size=file_size
+    )
+    db.add(new_document)
+    db.commit()
+    db.refresh(new_document)
+
+    return new_document

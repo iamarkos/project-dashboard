@@ -1,15 +1,18 @@
-# Use a lightweight Python image
 FROM python:3.12-slim
 
-# Set the working directory inside the container
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvbin/uv
+
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
 
-# Copy your actual application code into the container
+# Install dependencies using uv
+RUN /uvbin/uv sync --frozen
+
+# Copy the rest of the app
 COPY ./app ./app
 
-# Command to run the application
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Command to run (using the virtual environment created by uv)
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

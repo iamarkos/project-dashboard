@@ -70,6 +70,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String)
     file_path = Column(String)
+    file_size = Column(Integer) 
     project_id = Column(Integer, ForeignKey("projects.id"))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, server_default=func.now())
