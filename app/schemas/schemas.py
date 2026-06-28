@@ -38,3 +38,17 @@ class ProjectResponse(ProjectBase):
     created_by: int
 
     model_config = ConfigDict(from_attributes=True)
+
+class ProjectUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+
+class ProjectInvite(BaseModel):
+    user_id: int
+    role_id: int
+
+class ProjectInviteResponse(BaseModel):
+    project_id: int
+    user_id: int
+    role_id: int
+    role_name: str
