@@ -67,3 +67,6 @@ class DocumentBase(BaseModel):
 
     # This tells Pydantic to read the data from the SQLAlchemy database model
     model_config = ConfigDict(from_attributes=True)
+
+class DocumentUpdate(BaseModel):
+    filename: str

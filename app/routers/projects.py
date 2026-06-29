@@ -4,10 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from sqlalchemy import func
 
-from app import schemas
-from app.db.database import SessionLocal
 from app.models.models import Project, ProjectParticipant, Role, User, Document
-from app.schemas.schemas import DocumentBase, ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse
+from app.schemas.schemas import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse, DocumentBase, DocumentUpdate
 from app.dependencies import get_current_user, get_db
 from app.services.storage import upload_file_to_storage
 from app.core.config import settings
@@ -355,6 +353,51 @@ def download_document(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate download link.")
     
     return {"download_url": url}
+
+@router.put("/{project_id}/documents/{document_id}", response_model=DocumentBase)
+def update_document(
+    project_id: int,
+    document_id: int,
+    document_update: DocumentUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is a participant of the project
+    participant = (
+        db.query(ProjectParticipant)
+        .filter(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a participant of the project to update documents."
+        )
+
+    # Fetch the document and ensure it belongs to the specified project
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.project_id == project_id)
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found in this project."
+        )
+
+    # Update the document's filename
+    setattr(document, "filename", document_update.filename)
+    
+    db.commit()
+    db.refresh(document)
+
+    return document
 
 @router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
