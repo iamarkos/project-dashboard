@@ -1,16 +1,18 @@
-import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 from typing import List
 from sqlalchemy import func
 
+from app import schemas
 from app.db.database import SessionLocal
 from app.models.models import Project, ProjectParticipant, Role, User, Document
-from app.schemas.schemas import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse
+from app.schemas.schemas import DocumentBase, ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse
 from app.dependencies import get_current_user, get_db
 from app.services.storage import upload_file_to_storage
 from app.core.config import settings
+from app.services.storage import generate_presigned_url, delete_file
+
 
 # Load the limit from .env, default to 10MB if not provided
 MAX_PROJECT_SIZE_BYTES = settings.MAX_PROJECT_SIZE_MB * 1024 * 1024
@@ -269,7 +271,7 @@ def upload_document_to_project(
 
     # Upload the file to storage (MinIO)
     filename = file.filename or "unnamed_document.bin"
-    file_path = upload_file_to_storage(file.file, filename)
+    file_path = upload_file_to_storage(file.file, settings.MINIO_BUCKET_NAME, filename)
 
     # Create a new Document entry in the database
     new_document = Document(
@@ -284,3 +286,123 @@ def upload_document_to_project(
     db.refresh(new_document)
 
     return new_document
+
+@router.get("/{project_id}/documents", response_model=list[DocumentBase])
+def list_project_documents(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is a participant of the project
+    participant = (
+        db.query(ProjectParticipant)
+        .filter(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a participant of the project to view documents."
+        )
+
+    # Fetch all documents for the project
+    documents = db.query(Document).filter(Document.project_id == project_id).all()
+    return documents
+
+@router.get("/{project_id}/documents/{document_id}/download")
+def download_document(
+    project_id: int,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is a participant of the project
+    participant = (
+        db.query(ProjectParticipant)
+        .filter(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You must be a participant of the project to download documents."
+        )
+
+    # Fetch the document and ensure it belongs to the specified project
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.project_id == project_id)
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found in this project."
+        )
+
+    # 3. Generate the Presigned URL using boto3
+    url = generate_presigned_url(settings.MINIO_BUCKET_NAME, str(document.file_path))
+    if not url:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate download link.")
+    
+    return {"download_url": url}
+
+@router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_document(
+    project_id: int,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # Ensure the current user is a participant of the project
+    participant = (
+        db.query(ProjectParticipant)
+        .filter(
+            ProjectParticipant.project_id == project_id,
+            ProjectParticipant.user_id == current_user.id
+        )
+        .first()
+    )
+
+    if not participant:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to modify this project."
+        )
+
+    # Fetch the document and ensure it belongs to the specified project
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.project_id == project_id)
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found in this project."
+        )
+
+    # Delete physical file from MinIO
+    try:
+        delete_file(settings.MINIO_BUCKET_NAME, str(document.file_path))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+            detail="Failed to delete file from storage."
+        )
+
+    # Delete the document entry from the database
+    db.delete(document)
+    db.commit()
+
+    return  # 204 requires no response body

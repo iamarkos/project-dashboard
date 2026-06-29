@@ -52,3 +52,18 @@ class ProjectInviteResponse(BaseModel):
     user_id: int
     role_id: int
     role_name: str
+
+
+# ==========================
+# DOCUMENT SCHEMAS          
+# ==========================
+
+class DocumentBase(BaseModel):
+    id: int
+    project_id: int
+    filename: str
+    file_size: int
+    created_by: int
+
+    # This tells Pydantic to read the data from the SQLAlchemy database model
+    model_config = ConfigDict(from_attributes=True)
