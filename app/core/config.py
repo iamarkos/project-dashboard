@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     MINIO_BUCKET_NAME: str = "projects-bucket"
     MAX_PROJECT_SIZE_MB: int = 10
 
-    model_config = SettingsConfigDict(env_file=".env")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
 settings = Settings()

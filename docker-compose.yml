@@ -9,6 +9,9 @@ services:
     depends_on:
       - db
       - minio
+    volumes:
+      - ./app:/app/app
+      - ./tests:/app/tests
 
   db:
     image: postgres:15-alpine

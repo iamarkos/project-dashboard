@@ -39,14 +39,12 @@ def ensure_bucket_exists() -> None:
             print(f"Unexpected error checking bucket: {e}")
 
 
-# Execute the check immediately when FastAPI imports this file
-ensure_bucket_exists()
-
-
 def upload_file_to_storage(file_obj: BinaryIO, bucket_name: str, original_filename: str) -> str:
     """
     Streams a file object directly to MinIO and returns the unique storage key.
     """
+    ensure_bucket_exists()
+    
     file_extension = original_filename.split(".")[-1] if "." in original_filename else "bin"
     unique_filename = f"{uuid.uuid4()}.{file_extension}"
 
