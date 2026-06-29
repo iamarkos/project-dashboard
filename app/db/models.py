@@ -1,7 +1,9 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
-from sqlalchemy.sql import func
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
+
 from app.db.database import Base
+
 
 # 1. THE ROLE TABLE
 class Role(Base):
@@ -23,7 +25,7 @@ class User(Base):
     username = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    
+
     role_id = Column(Integer, ForeignKey("roles.id"))
     role = relationship("Role", back_populates="users")
 
@@ -43,9 +45,11 @@ class Project(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     owner = relationship("User", back_populates="owned_projects")
-    
+
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
-    participants = relationship("ProjectParticipant", back_populates="project", cascade="all, delete-orphan")
+    participants = relationship(
+        "ProjectParticipant", back_populates="project", cascade="all, delete-orphan"
+    )
 
 
 # 4. THE PROJECT PARTICIPANT TABLE
@@ -53,7 +57,7 @@ class ProjectParticipant(Base):
     __tablename__ = "project_participants"
 
     id = Column(Integer, primary_key=True, index=True)
-    
+
     project_id = Column(Integer, ForeignKey("projects.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     role_id = Column(Integer, ForeignKey("roles.id"))
@@ -70,7 +74,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     filename = Column(String)
     file_path = Column(String)
-    file_size = Column(Integer) 
+    file_size = Column(Integer)
     project_id = Column(Integer, ForeignKey("projects.id"))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, server_default=func.now())

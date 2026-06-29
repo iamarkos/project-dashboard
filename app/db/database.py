@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
+
 from app.core.config import settings
 
 # credentials from our docker-compose.yml
@@ -7,8 +8,10 @@ SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.POSTGRES_USER}:{settings.POST
 # manages the connection pool to PostgreSQL
 engine = create_engine(SQLALCHEMY_DATABASE_URL)
 
-# individual, temporary database sessions 
+# individual, temporary database sessions
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 # User, Project, Role will inherit from this so SQLAlchemy knows they represent actual db tables
-Base = declarative_base() 
+class Base(DeclarativeBase):
+    pass

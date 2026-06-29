@@ -1,28 +1,35 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi import UploadFile, File
-from sqlalchemy.orm import Session
-from typing import List
+from typing import Any
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 
-from app.models.models import Project, ProjectParticipant, Role, User, Document
-from app.schemas.schemas import ProjectCreate, ProjectResponse, ProjectUpdate, ProjectInvite, ProjectInviteResponse, DocumentBase, DocumentUpdate
-from app.dependencies import get_current_user, get_db
-from app.services.storage import upload_file_to_storage
+from app.api.dependencies import get_current_user, get_db
+from app.api.schemas import (
+    DocumentBase,
+    DocumentUpdate,
+    ProjectCreate,
+    ProjectInvite,
+    ProjectInviteResponse,
+    ProjectResponse,
+    ProjectUpdate,
+)
 from app.core.config import settings
-from app.services.storage import generate_presigned_url, delete_file
-
+from app.core.storage import delete_file, generate_presigned_url, upload_file_to_storage
+from app.db.models import Document, Project, ProjectParticipant, Role, User
 
 # Load the limit from .env, default to 10MB if not provided
 MAX_PROJECT_SIZE_BYTES = settings.MAX_PROJECT_SIZE_MB * 1024 * 1024
 
 router = APIRouter(prefix="/projects", tags=["Projects"])
 
+
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
 def create_project(
-    project_in: ProjectCreate, 
-    db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
-):
+    project_in: ProjectCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Any:
     # 1. Ensure the "Owner" role exists in the database
     owner_role = db.query(Role).filter(Role.name == "Owner").first()
     if not owner_role:
@@ -33,9 +40,7 @@ def create_project(
 
     # 2. Create the Project
     new_project = Project(
-        title=project_in.title,
-        description=project_in.description,
-        created_by=current_user.id
+        title=project_in.title, description=project_in.description, created_by=current_user.id
     )
     db.add(new_project)
     db.commit()
@@ -43,20 +48,18 @@ def create_project(
 
     # 3. Create the Participant linking the user, project, and role
     participant = ProjectParticipant(
-        project_id=new_project.id,
-        user_id=current_user.id,
-        role_id=owner_role.id
+        project_id=new_project.id, user_id=current_user.id, role_id=owner_role.id
     )
     db.add(participant)
     db.commit()
 
     return new_project
 
-@router.get("/", response_model=List[ProjectResponse])
+
+@router.get("/", response_model=list[ProjectResponse])
 def get_user_projects(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Any:
     # Fetch projects where the current user is a participant
     projects = (
         db.query(Project)
@@ -66,12 +69,11 @@ def get_user_projects(
     )
     return projects
 
+
 @router.get("/{project_id}", response_model=ProjectResponse)
 def get_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Any:
     # Fetch the project and ensure the current user is a participant
     project = (
         db.query(Project)
@@ -82,17 +84,18 @@ def get_project(
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found or you do not have access."
+            detail="Project not found or you do not have access.",
         )
     return project
+
 
 @router.patch("/{project_id}", response_model=ProjectResponse)
 def update_project(
     project_id: int,
     project_in: ProjectUpdate,  # You might want to create a separate schema for updates
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> Any:
     # Fetch the project and ensure the current user is a participant
     project = (
         db.query(Project)
@@ -103,7 +106,7 @@ def update_project(
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found or you do not have access."
+            detail="Project not found or you do not have access.",
         )
 
     update_data = project_in.model_dump(exclude_unset=True)
@@ -116,18 +119,17 @@ def update_project(
 
     return project
 
+
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_project(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> None:
     participant = (
         db.query(ProjectParticipant)
         .join(Role)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
@@ -136,107 +138,102 @@ def delete_project(
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found or you do not have access."
+            detail="Project not found or you do not have access.",
         )
-        
+
     # 2. Check if they have the Owner role
     if participant.role.name != "Owner":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the project owner can delete this project."
+            detail="Only the project owner can delete this project.",
         )
 
     # 3. Delete the actual project (CASCADE handles the rest)
     db.delete(participant.project)
     db.commit()
-    
-    return # 204 requires no response body
+
+    return  # 204 requires no response body
+
 
 @router.post("/{project_id}/invite", response_model=ProjectInviteResponse)
 def invite_user_to_project(
     project_id: int,
     invite_in: ProjectInvite,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> Any:
     # 1. Ensure the current user is the owner of the project
     participant = (
         db.query(ProjectParticipant)
         .join(Role)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
 
     if not participant or participant.role.name != "Owner":
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only the project owner can invite users."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Only the project owner can invite users."
         )
 
     # 2. Ensure the user to be invited exists
     user_to_invite = db.query(User).filter(User.id == invite_in.user_id).first()
     if not user_to_invite:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User to invite not found."
+            status_code=status.HTTP_404_NOT_FOUND, detail="User to invite not found."
         )
 
     # 3. Ensure the role exists
     role = db.query(Role).filter(Role.id == invite_in.role_id).first()
     if not role:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Role not found."
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
 
     # 4. Check if the user is already a participant in the project
     existing_participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == invite_in.user_id
+            ProjectParticipant.user_id == invite_in.user_id,
         )
         .first()
     )
     if existing_participant:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="User is already a participant in this project."
+            detail="User is already a participant in this project.",
         )
 
     # 5. Create the new participant entry
     new_participant = ProjectParticipant(
-        project_id=project_id,
-        user_id=invite_in.user_id,
-        role_id=invite_in.role_id
+        project_id=project_id, user_id=invite_in.user_id, role_id=invite_in.role_id
     )
     db.add(new_participant)
     db.commit()
-    #db.refresh(new_participant)
+    # db.refresh(new_participant)
 
     return ProjectInviteResponse(
         project_id=project_id,
         user_id=invite_in.user_id,
         role_id=invite_in.role_id,
-        role_name=str(role.name)
+        role_name=str(role.name),
     )
+
 
 @router.post("/{project_id}/documents")
 def upload_document_to_project(
     project_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> Any:
     # Ensure the current user is a participant of the project
     participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
@@ -244,7 +241,7 @@ def upload_document_to_project(
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be a participant of the project to upload documents."
+            detail="You must be a participant of the project to upload documents.",
         )
 
     # Read the file size in bytes
@@ -253,18 +250,20 @@ def upload_document_to_project(
     file.file.seek(0)  # Reset cursor back to the beginning for the upload stream
 
     # SIZE LIMIT CHECK
-    current_total_size = db.query(func.sum(Document.file_size)).filter(
-        Document.project_id == project_id
-    ).scalar() or 0  # .scalar() returns the single value, defaults to 0 if no files exist
+    current_total_size = (
+        db.query(func.sum(Document.file_size)).filter(Document.project_id == project_id).scalar()
+        or 0
+    )  # .scalar() returns the single value, defaults to 0 if no files exist
 
     if current_total_size + file_size > MAX_PROJECT_SIZE_BYTES:
         # Calculate the MB values dynamically for the error message
         max_mb = settings.MAX_PROJECT_SIZE_MB
         current_mb = current_total_size / (1024 * 1024)
-        
+
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Upload rejected. Project storage limit is {max_mb}MB. Current usage: {current_mb:.2f}MB."
+            detail=f"Upload rejected. Project storage limit is {max_mb}MB. \
+                Current usage: {current_mb:.2f}MB.",
         )
 
     # Upload the file to storage (MinIO)
@@ -277,7 +276,7 @@ def upload_document_to_project(
         created_by=current_user.id,
         filename=filename,
         file_path=file_path,
-        file_size=file_size
+        file_size=file_size,
     )
     db.add(new_document)
     db.commit()
@@ -285,18 +284,17 @@ def upload_document_to_project(
 
     return new_document
 
+
 @router.get("/{project_id}/documents", response_model=list[DocumentBase])
 def list_project_documents(
-    project_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+) -> Any:
     # Ensure the current user is a participant of the project
     participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
@@ -304,26 +302,27 @@ def list_project_documents(
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be a participant of the project to view documents."
+            detail="You must be a participant of the project to view documents.",
         )
 
     # Fetch all documents for the project
     documents = db.query(Document).filter(Document.project_id == project_id).all()
     return documents
 
+
 @router.get("/{project_id}/documents/{document_id}/download")
 def download_document(
     project_id: int,
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> dict[str, str]:
     # Ensure the current user is a participant of the project
     participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
@@ -331,7 +330,7 @@ def download_document(
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be a participant of the project to download documents."
+            detail="You must be a participant of the project to download documents.",
         )
 
     # Fetch the document and ensure it belongs to the specified project
@@ -343,16 +342,19 @@ def download_document(
 
     if not document:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found in this project."
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
         )
 
     # 3. Generate the Presigned URL using boto3
     url = generate_presigned_url(settings.MINIO_BUCKET_NAME, str(document.file_path))
     if not url:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not generate download link.")
-    
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not generate download link.",
+        )
+
     return {"download_url": url}
+
 
 @router.put("/{project_id}/documents/{document_id}", response_model=DocumentBase)
 def update_document(
@@ -360,14 +362,14 @@ def update_document(
     document_id: int,
     document_update: DocumentUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> Any:
     # Ensure the current user is a participant of the project
     participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
@@ -375,7 +377,7 @@ def update_document(
     if not participant:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="You must be a participant of the project to update documents."
+            detail="You must be a participant of the project to update documents.",
         )
 
     # Fetch the document and ensure it belongs to the specified project
@@ -387,39 +389,38 @@ def update_document(
 
     if not document:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found in this project."
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
         )
 
     # Update the document's filename
     setattr(document, "filename", document_update.filename)
-    
+
     db.commit()
     db.refresh(document)
 
     return document
+
 
 @router.delete("/{project_id}/documents/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     project_id: int,
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
+    current_user: User = Depends(get_current_user),
+) -> None:
     # Ensure the current user is a participant of the project
     participant = (
         db.query(ProjectParticipant)
         .filter(
             ProjectParticipant.project_id == project_id,
-            ProjectParticipant.user_id == current_user.id
+            ProjectParticipant.user_id == current_user.id,
         )
         .first()
     )
 
     if not participant:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authorized to modify this project."
+            status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to modify this project."
         )
 
     # Fetch the document and ensure it belongs to the specified project
@@ -431,17 +432,16 @@ def delete_document(
 
     if not document:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found in this project."
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
         )
 
     # Delete physical file from MinIO
     try:
         delete_file(settings.MINIO_BUCKET_NAME, str(document.file_path))
-    except Exception as e:
+    except Exception:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
-            detail="Failed to delete file from storage."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete file from storage.",
         )
 
     # Delete the document entry from the database

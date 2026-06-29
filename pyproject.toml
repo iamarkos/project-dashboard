@@ -16,3 +16,28 @@ dependencies = [
     "boto3>=1.43.36",
     "pydantic-settings>=2.14.2",
 ]
+
+[tool.ruff]
+# Enable standard formatting and linting
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# E: pycodestyle (standard formatting)
+# F: Pyflakes (catches unused imports/variables)
+# I: isort (automatically sorts your imports alphabetically/logically)
+select = ["E", "F", "I"]
+
+[tool.mypy]
+# Strict type checking configuration
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "mypy>=2.1.0",
+    "pytest>=9.1.1",
+    "ruff>=0.15.20",
+]
