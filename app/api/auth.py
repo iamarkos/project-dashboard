@@ -1,23 +1,45 @@
-from typing import Generator
+from typing import Any, Generator
 
+import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
+from app.api.dependencies import get_db
+from app.api.schemas import UserResponse, UserCreate
 from app.core.security import create_access_token, verify_password
 from app.db.database import SessionLocal
-from app.db.models import User
+from app.db.models import Role, User
 
-router = APIRouter(prefix="/auth", tags=["Authentication"])
+router = APIRouter(tags=["Authentication"])
 
+@router.post("/auth", response_model=UserResponse)
+def create_user(user: UserCreate, db: Session = Depends(get_db)) -> Any:
 
-def get_db() -> Generator[Session, None, None]:
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    # 1. Prevent Foreign Key Crash: Ensure a default role exists
+    default_role = db.query(Role).filter(Role.name == "Participant").first()
+    if not default_role:
+        default_role = Role(name="Participant")
+        db.add(default_role)
+        db.commit()
+        db.refresh(default_role)
 
+    # 2. Check if the email exists
+    existing_user = db.query(User).filter(User.email == user.email).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    # 3. Hash the password
+    hashed_pw = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+    # 4. Create the SQLAlchemy Object and save it
+    new_user = User(
+        username=user.username, email=user.email, hashed_password=hashed_pw, role_id=default_role.id
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    return new_user
 
 @router.post("/login")
 def login_for_access_token(
