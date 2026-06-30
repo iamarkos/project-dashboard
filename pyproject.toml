@@ -15,6 +15,8 @@ dependencies = [
     "python-multipart>=0.0.9",
     "boto3>=1.43.36",
     "pydantic-settings>=2.14.2",
+    "moto>=5.2.2",
+    "pytest-cov>=7.1.0",
 ]
 
 [tool.ruff]
@@ -39,5 +41,6 @@ dev = [
     "httpx>=0.28.1",
     "mypy>=2.1.0",
     "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "ruff>=0.15.20",
 ]

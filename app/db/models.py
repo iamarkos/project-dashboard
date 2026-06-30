@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -58,13 +58,15 @@ class ProjectParticipant(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    project_id = Column(Integer, ForeignKey("projects.id"))
-    user_id = Column(Integer, ForeignKey("users.id"))
+    project_id = Column(Integer, ForeignKey("projects.id"), index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), index=True)
     role_id = Column(Integer, ForeignKey("roles.id"))
 
     project = relationship("Project", back_populates="participants")
     user = relationship("User", back_populates="participating_in")
     role = relationship("Role", back_populates="participant_assignments")
+
+    __table_args__ = (UniqueConstraint("project_id", "user_id", name="_user_project_uc"),)
 
 
 # 5. THE DOCUMENT TABLE

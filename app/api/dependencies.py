@@ -11,7 +11,7 @@ from app.db.database import SessionLocal
 from app.db.models import User
 
 # points to login endpoint so Swagger knows where to authenticate
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 
 def get_db() -> Generator[Session, None, None]:

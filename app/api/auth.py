@@ -1,4 +1,4 @@
-from typing import Any, Generator
+from typing import Any
 
 import bcrypt
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -6,12 +6,12 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import get_db
-from app.api.schemas import UserResponse, UserCreate
+from app.api.schemas import UserCreate, UserResponse
 from app.core.security import create_access_token, verify_password
-from app.db.database import SessionLocal
 from app.db.models import Role, User
 
 router = APIRouter(tags=["Authentication"])
+
 
 @router.post("/auth", response_model=UserResponse)
 def create_user(user: UserCreate, db: Session = Depends(get_db)) -> Any:
@@ -19,11 +19,9 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> Any:
     # 1. Prevent Foreign Key Crash: Ensure a default role exists
     default_role = db.query(Role).filter(Role.name == "Participant").first()
     if not default_role:
-        default_role = Role(name="Participant")
-        db.add(default_role)
-        db.commit()
-        db.refresh(default_role)
-
+        raise HTTPException(
+            status_code=500, detail="System configuration error: Role 'Participant' not found."
+        )
     # 2. Check if the email exists
     existing_user = db.query(User).filter(User.email == user.email).first()
     if existing_user:
@@ -40,6 +38,7 @@ def create_user(user: UserCreate, db: Session = Depends(get_db)) -> Any:
     db.refresh(new_user)
 
     return new_user
+
 
 @router.post("/login")
 def login_for_access_token(
