@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from fastapi import Depends, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
@@ -7,6 +9,12 @@ from app.core.storage import delete_file, generate_presigned_url, upload_file_to
 from app.db.database import get_db
 from app.db.models import Document, User
 from app.repositories.document_repository import DocumentRepository
+
+ALLOWED_EXTENSIONS = {".pdf", ".docx"}
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
 
 
 class DocumentService:
@@ -19,6 +27,12 @@ class DocumentService:
         self.document_repo = document_repo
 
     def upload_document(self, project_id: int, current_user: User, file: UploadFile) -> Document:
+
+        # Check file type
+        extension = Path(str(file.filename)).suffix.lower()
+        if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_MIME_TYPES:
+            raise HTTPException(status_code=400, detail="Only PDF and DOCX files are allowed.")
+
         # Read the file size in bytes
         file.file.seek(0, 2)
         file_size = file.file.tell()

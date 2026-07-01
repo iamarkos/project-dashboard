@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Self
 
-from pydantic import BaseModel, ConfigDict, EmailStr
+from pydantic import BaseModel, ConfigDict, EmailStr, model_validator
 
 # ==========================
 # USER SCHEMAS
@@ -17,6 +17,13 @@ class UserBase(BaseModel):
 # 2. The Request (Create): What we expect the user to send us
 class UserCreate(UserBase):
     password: str
+    repeat_password: str
+
+    @model_validator(mode="after")
+    def passwords_match(self) -> Self:
+        if self.password != self.repeat_password:
+            raise ValueError("Passwords do not match")
+        return self
 
 
 # 3. The Response: What we send back to the user

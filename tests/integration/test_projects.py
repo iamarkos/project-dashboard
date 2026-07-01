@@ -102,6 +102,7 @@ def test_invite_user_to_project(client: TestClient, auth_headers: dict, test_pro
             "username": f"inv_{unique_id.hex[:8]}",
             "email": f"invitee_{unique_id}@example.com",
             "password": "password",
+            "repeat_password": "password",
         },
     )
     invitee_id = auth_response.json()["id"]

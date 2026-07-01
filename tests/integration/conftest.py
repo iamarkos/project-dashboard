@@ -53,7 +53,12 @@ def auth_headers(client: TestClient) -> dict:
     # 1. Register
     client.post(
         "/auth",
-        json={"username": username, "email": f"{username}@example.com", "password": password},
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": password,
+            "repeat_password": password,
+        },
     )
     # 2. Login
     login_response = client.post("/login", data={"username": username, "password": password})
@@ -73,7 +78,12 @@ def alt_auth_headers(client: TestClient) -> dict:
     # Register and Login User B
     client.post(
         "/auth",
-        json={"username": username, "email": f"{username}@example.com", "password": password},
+        json={
+            "username": username,
+            "email": f"{username}@example.com",
+            "password": password,
+            "repeat_password": password,
+        },
     )
     login_response = client.post("/login", data={"username": username, "password": password})
     return {"Authorization": f"Bearer {login_response.json()['access_token']}"}

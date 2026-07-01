@@ -10,30 +10,29 @@ def test_upload_document_success(
     # 1. ARRANGE: Create a dummy file in memory
     file_content = b"This is the content of the document"
     file = io.BytesIO(file_content)
-    file.name = "test_document.txt"
+    file.name = "test_document.pdf"
 
     project_id = test_project["id"]
 
     # 2. ACT: Send as multipart/form-data
-    # Note: 'file' is the key your backend expects (e.g., UploadFile(..., alias="file"))
-    files = {"file": (file.name, file, "text/plain")}
+    files = {"file": (file.name, file, "application/pdf")}
     response = client.post(f"/projects/{project_id}/documents", files=files, headers=auth_headers)
 
     # 3. ASSERT
     assert response.status_code in (200, 201)
     data = response.json()
-    assert data["filename"] == "test_document.txt"
+    assert data["filename"] == "test_document.pdf"
     assert "id" in data
 
 
 def test_download_document(client: TestClient, auth_headers: dict, test_project: dict) -> None:
     # Upload a document
     file = io.BytesIO(b"Hello World")
-    file.name = "download_me.txt"
+    file.name = "download_me.pdf"
     project_id = test_project["id"]
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
     doc_id = upload_res.json()["id"]
@@ -50,9 +49,6 @@ def test_download_document(client: TestClient, auth_headers: dict, test_project:
     assert "download_url" in data
     assert data["download_url"].startswith("http")
 
-    data = response.json()
-    assert "download_url" in data
-
     # Verify the download URL actually works
     import httpx  # to request the pre-signed URL
 
@@ -67,12 +63,12 @@ def test_download_document_forbidden(
 ) -> None:
     # The Owner (auth_headers) uploads a private document
     file = io.BytesIO(b"Top Secret Content")
-    file.name = "secret_file.txt"
+    file.name = "secret_file.pdf"
     project_id = test_project["id"]
 
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
     doc_id = upload_res.json()["id"]
@@ -90,12 +86,12 @@ def test_delete_document_forbidden(
 ) -> None:
     # User A (Owner) uploads a document
     file = io.BytesIO(b"Crucial business data")
-    file.name = "important.txt"
+    file.name = "important.pdf"
     project_id = test_project["id"]
 
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
     doc_id = upload_res.json()["id"]
@@ -109,12 +105,12 @@ def test_delete_document_forbidden(
 def test_upload_empty_document(client: TestClient, auth_headers: dict, test_project: dict) -> None:
     # Create a 0-byte file
     file = io.BytesIO(b"")
-    file.name = "empty_file.txt"
+    file.name = "empty_file.pdf"
     project_id = test_project["id"]
 
     response = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
 
@@ -126,12 +122,12 @@ def test_project_deletion_cascades_to_documents(
 ) -> None:
     # Upload a document to the project
     file = io.BytesIO(b"Data to be destroyed")
-    file.name = "doomed_file.txt"
+    file.name = "doomed_file.pdf"
     project_id = test_project["id"]
 
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
     doc_id = upload_res.json()["id"]
@@ -155,13 +151,13 @@ def test_project_storage_limit_exceeded(
     monkeypatch.setattr("app.core.config.settings.MAX_PROJECT_SIZE_MB", 0)
 
     file = io.BytesIO(b"This file is 38 bytes, which is greater than 0!")
-    file.name = "too_big.txt"
+    file.name = "too_big.pdf"
     project_id = test_project["id"]
 
     # Attempt to upload the file
     response = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
 
@@ -180,10 +176,10 @@ def test_list_documents(
 
     # Upload a document so the list isn't empty
     file = io.BytesIO(b"Data for listing")
-    file.name = "list_me.txt"
+    file.name = "list_me.pdf"
     client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
 
@@ -204,10 +200,10 @@ def test_update_document(
 
     # Upload a document to get a valid doc_id
     file = io.BytesIO(b"Data for updating")
-    file.name = "original_name.txt"
+    file.name = "original_name.pdf"
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=auth_headers,
     )
     doc_id = upload_res.json()["id"]
@@ -215,16 +211,16 @@ def test_update_document(
     # Happy Path (Owner can update)
     update_res = client.put(
         f"/projects/{project_id}/documents/{doc_id}",
-        json={"filename": "new_name.txt"},
+        json={"filename": "new_name.pdf"},
         headers=auth_headers,
     )
     assert update_res.status_code == 200
-    assert update_res.json()["filename"] == "new_name.txt"
+    assert update_res.json()["filename"] == "new_name.pdf"
 
     # Forbidden (Non-participant blocked)
     update_forbidden = client.put(
         f"/projects/{project_id}/documents/{doc_id}",
-        json={"filename": "hacked_name.txt"},
+        json={"filename": "hacked_name.pdf"},
         headers=alt_auth_headers,
     )
     assert update_forbidden.status_code == 403
@@ -238,10 +234,10 @@ def test_document_edge_cases_and_not_found(
 
     # 1. TEST UPLOAD FORBIDDEN
     file = io.BytesIO(b"Forbidden upload")
-    file.name = "forbidden.txt"
+    file.name = "forbidden.pdf"
     upload_res = client.post(
         f"/projects/{project_id}/documents",
-        files={"file": (file.name, file, "text/plain")},
+        files={"file": (file.name, file, "application/pdf")},
         headers=alt_auth_headers,
     )
     assert upload_res.status_code == 403
@@ -255,7 +251,7 @@ def test_document_edge_cases_and_not_found(
     # 3. TEST UPDATE NOT FOUND -> Covers line 180
     update_res = client.put(
         f"/projects/{project_id}/documents/{fake_doc_id}",
-        json={"filename": "wont_work.txt"},
+        json={"filename": "wont_work.pdf"},
         headers=auth_headers,
     )
     assert update_res.status_code == 404
@@ -265,3 +261,26 @@ def test_document_edge_cases_and_not_found(
         f"/projects/{project_id}/documents/{fake_doc_id}", headers=auth_headers
     )
     assert delete_res.status_code == 404
+
+
+def test_upload_invalid_file_type(
+    client: TestClient, auth_headers: dict, test_project: dict
+) -> None:
+    # Attempt to upload a forbidden .txt file
+    file = io.BytesIO(b"This is a text file")
+    file.name = "invalid_format.txt"
+    project_id = test_project["id"]
+
+    response = client.post(
+        f"/projects/{project_id}/documents",
+        files={"file": (file.name, file, "text/plain")},
+        headers=auth_headers,
+    )
+
+    # API should reject it because it's not a pdf or docx
+    assert response.status_code in (400, 422)
+    assert (
+        "type" in response.text.lower()
+        or "format" in response.text.lower()
+        or "pdf" in response.text.lower()
+    )

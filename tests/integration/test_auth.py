@@ -12,6 +12,7 @@ def test_create_user_success(client: TestClient) -> None:
         "username": unique_username,
         "email": unique_email,
         "password": "securepassword123",
+        "repeat_password": "securepassword123",
     }
 
     # Send the payload to the users endpoint
@@ -34,11 +35,21 @@ def test_create_user_success(client: TestClient) -> None:
 def test_create_user_duplicate_email(client: TestClient) -> None:
     # 1. ARRANGE: Create a user first
     email = "duplicate@example.com"
-    user_payload = {"username": "tester1", "email": email, "password": "password123"}
+    user_payload = {
+        "username": "tester1",
+        "email": email,
+        "password": "password123",
+        "repeat_password": "password123",
+    }
     client.post("/auth", json=user_payload)
 
     # 2. ACT: Try to create another user with the SAME email
-    duplicate_payload = {"username": "tester2", "email": email, "password": "password123"}
+    duplicate_payload = {
+        "username": "tester2",
+        "email": email,
+        "password": "password123",
+        "repeat_password": "password123",
+    }
     response = client.post("/auth", json=duplicate_payload)
 
     # 3. ASSERT: Expect a failure
@@ -56,7 +67,13 @@ def test_login_success(client: TestClient) -> None:
     password = "supersecretpassword"
 
     setup_response = client.post(
-        "/auth", json={"username": username, "email": email, "password": password}
+        "/auth",
+        json={
+            "username": username,
+            "email": email,
+            "password": password,
+            "repeat_password": password,
+        },
     )
     assert setup_response.status_code in (200, 201), f"Setup failed: {setup_response.text}"
 
@@ -82,6 +99,7 @@ def test_login_wrong_password(client: TestClient) -> None:
             "username": username,
             "email": f"{username}@example.com",
             "password": "correctpassword",
+            "repeat_password": "correctpassword",
         },
     )
 
