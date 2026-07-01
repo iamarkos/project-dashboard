@@ -22,8 +22,36 @@ class UserCreate(UserBase):
 # 3. The Response: What we send back to the user
 class UserResponse(UserBase):
     id: int
-    role_id: int
     # SQLAlchemy model, not just a standard Python dictionary
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ==========================
+# DOCUMENT SCHEMAS
+# ==========================
+
+
+class DocumentBase(BaseModel):
+    id: int
+    project_id: int
+    filename: str
+    file_size: int
+    created_by: int
+
+    # This tells Pydantic to read the data from the SQLAlchemy database model
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DocumentUpdate(BaseModel):
+    filename: str
+
+
+class DocumentResponse(BaseModel):
+    id: int
+    filename: str
+    file_size: int
+    created_by: int
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -46,6 +74,8 @@ class ProjectResponse(ProjectBase):
     created_at: datetime
     created_by: int
 
+    documents: list[DocumentResponse] = []
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -62,25 +92,4 @@ class ProjectInvite(BaseModel):
 class ProjectInviteResponse(BaseModel):
     project_id: int
     user_id: int
-    role_id: int
     role_name: str
-
-
-# ==========================
-# DOCUMENT SCHEMAS
-# ==========================
-
-
-class DocumentBase(BaseModel):
-    id: int
-    project_id: int
-    filename: str
-    file_size: int
-    created_by: int
-
-    # This tells Pydantic to read the data from the SQLAlchemy database model
-    model_config = ConfigDict(from_attributes=True)
-
-
-class DocumentUpdate(BaseModel):
-    filename: str

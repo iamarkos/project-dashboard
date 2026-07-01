@@ -6,8 +6,8 @@ from moto import mock_aws
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.dependencies import get_db
 from app.db import database
+from app.db.database import get_db
 from app.main import app
 
 # Use the secure URL from your environment variables

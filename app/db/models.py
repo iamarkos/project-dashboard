@@ -1,5 +1,7 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, UniqueConstraint
-from sqlalchemy.orm import relationship
+from datetime import datetime
+
+from sqlalchemy import ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.database import Base
@@ -9,46 +11,44 @@ from app.db.database import Base
 class Role(Base):
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(unique=True, index=True)
 
-    users = relationship("User", back_populates="role")
-    # a role can be assigned to many participants across different projects
-    participant_assignments = relationship("ProjectParticipant", back_populates="role")
+    # A role can be assigned to many participants across different projects
+    participant_assignments: Mapped[list["ProjectParticipant"]] = relationship(
+        back_populates="role"
+    )
 
 
 # 2. THE USER TABLE
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(unique=True, index=True)
+    email: Mapped[str] = mapped_column(unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column()
 
-    role_id = Column(Integer, ForeignKey("roles.id"))
-    role = relationship("Role", back_populates="users")
-
-    # link the user to projects and documents
-    owned_projects = relationship("Project", back_populates="owner")
-    participating_in = relationship("ProjectParticipant", back_populates="user")
+    # Link the user to projects
+    participating_in: Mapped[list["ProjectParticipant"]] = relationship(back_populates="user")
 
 
 # 3. THE PROJECT TABLE
 class Project(Base):
     __tablename__ = "projects"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(String)
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(index=True)
+    # Using str | None makes it nullable in the DB
+    description: Mapped[str | None] = mapped_column()
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    owner = relationship("User", back_populates="owned_projects")
-
-    documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
-    participants = relationship(
-        "ProjectParticipant", back_populates="project", cascade="all, delete-orphan"
+    documents: Mapped[list["Document"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
+    )
+    participants: Mapped[list["ProjectParticipant"]] = relationship(
+        back_populates="project", cascade="all, delete-orphan"
     )
 
 
@@ -56,15 +56,15 @@ class Project(Base):
 class ProjectParticipant(Base):
     __tablename__ = "project_participants"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
-    project_id = Column(Integer, ForeignKey("projects.id"), index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), index=True)
-    role_id = Column(Integer, ForeignKey("roles.id"))
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"))
 
-    project = relationship("Project", back_populates="participants")
-    user = relationship("User", back_populates="participating_in")
-    role = relationship("Role", back_populates="participant_assignments")
+    project: Mapped["Project"] = relationship(back_populates="participants")
+    user: Mapped["User"] = relationship(back_populates="participating_in")
+    role: Mapped["Role"] = relationship(back_populates="participant_assignments")
 
     __table_args__ = (UniqueConstraint("project_id", "user_id", name="_user_project_uc"),)
 
@@ -73,14 +73,13 @@ class ProjectParticipant(Base):
 class Document(Base):
     __tablename__ = "documents"
 
-    id = Column(Integer, primary_key=True, index=True)
-    filename = Column(String)
-    file_path = Column(String)
-    file_size = Column(Integer)
-    project_id = Column(Integer, ForeignKey("projects.id"))
-    created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, server_default=func.now())
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    filename: Mapped[str] = mapped_column()
+    file_path: Mapped[str] = mapped_column()
+    file_size: Mapped[int] = mapped_column()
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"))
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-    project = relationship("Project", back_populates="documents")
-    # no need to access uploader from document
-    uploader = relationship("User")
+    project: Mapped["Project"] = relationship(back_populates="documents")
+    uploader: Mapped["User"] = relationship()

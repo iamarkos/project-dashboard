@@ -9,7 +9,7 @@
 
 ## Architecture & Choices
 * **Database:** PostgreSQL. Structured in 3NF (e.g., extracting participant roles into a dedicated `roles` enum table).
-* **ORM & DB Access:** SQLAlchemy 2.0. Database communication will be encapsulated within a Singleton class inside the `services/` directory to act as the sole interface between the FastAPI routes and the database.
+* **ORM & DB Access:** SQLAlchemy 2.0. The application strictly follows a **Layered Architecture**. Database queries are encapsulated within **Repositories**, while business logic and validations are handled by **Services**. FastAPI routers act only as the HTTP entry points, ensuring a highly decoupled and testable system.
 * **Auth:** FastAPI `OAuth2PasswordBearer`, JWT (PyJWT), and password hashing via `passlib` (bcrypt).
 * **Files:** Object storage managed via MinIO (S3-compatible API) running in a Docker container, architected for a seamless future migration to AWS S3. File metadata is tracked in the database.
 
@@ -29,28 +29,31 @@ Ensure the Docker daemon is running, then start the API, Database, and MinIO sto
 * **API Interactive Docs (Swagger):** `http://127.0.0.1:8000/docs`
 * **MinIO Storage Dashboard:** `http://127.0.0.1:9001`
 
+---
+
 ## API Summary
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/auth/register` | Create a new user account |
-| POST | `/auth/login` | Authenticate and retrieve JWT |
-| GET | `/projects` | List all projects accessible to the user |
-| POST | `/projects` | Create a new project (sets user as owner) |
+| POST | `/auth` | Create a new user account |
+| POST | `/login` | Authenticate and retrieve JWT |
+| GET | `/projects` | List all projects accessible to the user (includes details & documents) |
+| POST | `/projects` | Create a new project (sets user as Owner) |
 | GET | `/projects/{id}` | Retrieve detailed information for a specific project |
-| PATCH| `/projects/{id}` | Update project metadata |
-| DELETE | `/projects/{id}` | Remove a project and its documents (Owner only) |
+| PATCH| `/projects/{id}` | Update project metadata (name, description) |
+| DELETE | `/projects/{id}` | Delete project and corresponding documents (Owner only) |
 | GET | `/projects/{id}/documents` | List all documents attached to a project |
-| POST | `/projects/{id}/documents` | Upload a new document to a project |
-| GET | `/documents/{id}` | Download a specific document |
-| DELETE | `/documents/{id}` | Delete a specific document |
-| POST | `/projects/{id}/invite` | Grant another user access to the project |
+| POST | `/projects/{id}/documents` | Upload document(s) to a project |
+| GET | `/projects/{project_id}/documents/{document_id}/download` | Download a specific document |
+| PUT | `/projects/{project_id}/documents/{document_id}` | Update a document's filename |
+| DELETE | `/projects/{project_id}/documents/{document_id}` | Delete a document |
+| POST | `/projects/{id}/invite` | Grant another user access to the project (Owner only) |
 
 ---
 
 ## Detailed API Specification
 
-### POST /auth/register
+### POST /auth
 Create a new user account.
 **Request:**
 ```json
@@ -72,8 +75,8 @@ Create a new user account.
 * `400` Username or Email already exists.
 * `422` Validation Error (e.g., weak password).
 
-### POST /auth/login
-Authenticate user credentials and issue a JWT.
+### POST /login
+Authenticate user credentials and issue a JWT. (JWT lasts 1 hour)
 **Request (Form Data):**
 `username=jdoe&password=securepassword123`
 **Response (200 OK):**
@@ -102,7 +105,8 @@ Create a new project. The creator is automatically assigned the "Owner" role.
   "title": "Alpha Migration",
   "description": "Server migration planning.",
   "created_by": 1,
-  "created_at": "2026-06-18T10:00:00Z"
+  "created_at": "2026-06-18T10:00:00Z",
+  "documents": []
 }
 ```
 **Errors:**
@@ -121,9 +125,10 @@ Update specific fields of an existing project.
 {
   "id": 101,
   "title": "Alpha Migration",
-  "description": "Updated server migration planning scope.",
+  "description": "Updated scope.",
   "created_by": 1,
-  "created_at": "2026-06-18T10:00:00Z"
+  "created_at": "2026-06-18T10:00:00Z",
+  "documents": []
 }
 ```
 **Errors:**
@@ -140,9 +145,8 @@ Upload a new document to a specific project.
   "id": 505,
   "project_id": 101,
   "filename": "migration_architecture.pdf",
-  "file_path": "/uploads/101/migration_architecture.pdf",
-  "created_by": 1,
-  "created_at": "2026-06-18T10:05:00Z"
+  "file_size": 1048576,
+  "created_by": 1
 }
 ```
 **Errors:**
@@ -165,7 +169,6 @@ Grant another user access to the project by assigning them a specific role.
 {
   "project_id": 101,
   "user_id": 2,
-  "role_id": 2,
   "role_name": "Participant"
 }
 ```

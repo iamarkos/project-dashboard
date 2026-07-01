@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, documents, projects
+from app.api.routers import auth, documents, projects
 from app.db.database import Base, SessionLocal, engine
 from app.db.models import Role
 
