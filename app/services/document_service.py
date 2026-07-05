@@ -1,12 +1,9 @@
 from pathlib import Path
 
-from fastapi import Depends, HTTPException, UploadFile, status
-from sqlalchemy.orm import Session
-
+from fastapi import UploadFile
 from app.api.schemas import DocumentUpdate
 from app.core.config import settings
 from app.core.storage import delete_file, generate_presigned_url, upload_file_to_storage
-from app.db.database import get_db
 from app.db.models import Document, User
 from app.repositories.document_repository import DocumentRepository
 
@@ -20,10 +17,8 @@ ALLOWED_MIME_TYPES = {
 class DocumentService:
     def __init__(
         self,
-        db: Session = Depends(get_db),
-        document_repo: DocumentRepository = Depends(),
+        document_repo: DocumentRepository,
     ):
-        self.db = db
         self.document_repo = document_repo
 
     def upload_document(self, project_id: int, current_user: User, file: UploadFile) -> Document:
@@ -31,7 +26,7 @@ class DocumentService:
         # Check file type
         extension = Path(str(file.filename)).suffix.lower()
         if extension not in ALLOWED_EXTENSIONS or file.content_type not in ALLOWED_MIME_TYPES:
-            raise HTTPException(status_code=400, detail="Only PDF and DOCX files are allowed.")
+            raise ValueError("Only PDF and DOCX files are allowed.")
 
         # Read the file size in bytes
         file.file.seek(0, 2)
@@ -44,10 +39,9 @@ class DocumentService:
 
         if current_total_size + file_size > max_bytes:
             current_mb = current_total_size / (1024 * 1024)
-            raise HTTPException(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"Upload rejected. Project storage limit is {settings.MAX_PROJECT_SIZE_MB} \
-                    MB. Current usage: {current_mb:.2f}MB.",
+            raise ValueError(
+                f"Upload rejected. Project storage limit is {settings.MAX_PROJECT_SIZE_MB} \
+                    MB. Current usage: {current_mb:.2f}MB."
             )
 
         # Upload to MinIO
@@ -62,11 +56,8 @@ class DocumentService:
             file_path=file_path,
             file_size=file_size,
         )
-        self.document_repo.add_document(new_document)
-        self.db.commit()
-        self.db.refresh(new_document)
 
-        return new_document
+        return self.document_repo.add_document(new_document)
 
     def list_documents(self, project_id: int) -> list[Document]:
         return self.document_repo.list_project_documents(project_id)
@@ -74,15 +65,14 @@ class DocumentService:
     def get_download_url(self, project_id: int, document_id: int) -> dict[str, str]:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
+            raise ValueError(
+                "Document not found in this project."
             )
 
         url = generate_presigned_url(settings.MINIO_BUCKET_NAME, str(document.file_path))
         if not url:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Could not generate download link.",
+            raise RuntimeError(
+                "Could not generate download link."
             )
 
         return {"download_url": url}
@@ -92,29 +82,24 @@ class DocumentService:
     ) -> Document:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
+            raise ValueError(
+                "Document not found in this project."
             )
 
-        setattr(document, "filename", document_update.filename)
-        self.db.commit()
-        self.db.refresh(document)
-        return document
+        return self.document_repo.update_document(document, document_update.filename)
 
     def delete_document(self, project_id: int, document_id: int) -> None:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Document not found in this project."
+            raise ValueError(
+                "Document not found in this project."
             )
 
         try:
             delete_file(settings.MINIO_BUCKET_NAME, str(document.file_path))
         except Exception:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to delete file from storage.",
+            raise RuntimeError(
+                "Failed to delete file from storage."
             )
 
         self.document_repo.delete_document(document)
-        self.db.commit()

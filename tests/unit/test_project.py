@@ -12,7 +12,6 @@ from app.services.project_service import ProjectService
 @pytest.fixture
 def project_service():
     return ProjectService(
-        db=MagicMock(),
         project_repo=MagicMock(),
         participant_repo=MagicMock(),
         user_repo=MagicMock(),
@@ -23,16 +22,15 @@ def project_service():
 def test_create_project_success(project_service):
     owner = User(id=1, username="owner")
     mock_role = Role(id=1, name=ProjectRole.OWNER.value)
-
     project_service.role_repo.get_role_by_name.return_value = mock_role
+
+    project_service.project_repo.add_project.side_effect = lambda p, part: p
 
     project = project_service.create_project(owner=owner, title="New Project", description="Desc")
 
     assert project.title == "New Project"
     assert project.created_by == 1
     project_service.project_repo.add_project.assert_called_once()
-    project_service.project_repo.add_participant.assert_called_once()
-    project_service.db.commit.assert_called_once()
 
 
 def test_update_project_no_access(project_service):
@@ -41,21 +39,20 @@ def test_update_project_no_access(project_service):
 
     project_service.participant_repo.has_access.return_value = False
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PermissionError) as exc:
         project_service.update_project(project_id=10, current_user=user, project_in=update_data)
 
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "no access" in str(exc.value)
 
 
 def test_delete_project_not_owner(project_service):
     user = User(id=2)
     project_service.participant_repo.is_owner.return_value = False
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PermissionError) as exc:
         project_service.delete_project(project_id=1, current_user=user)
 
-    assert exc.value.status_code == status.HTTP_403_FORBIDDEN
-    assert "Only the project owner" in exc.value.detail
+    assert "Only the project owner" in str(exc.value)
 
 
 def test_invite_user_success(project_service):
@@ -73,7 +70,6 @@ def test_invite_user_success(project_service):
     assert response.user_id == 2
     assert response.role_name == "Viewer"
     project_service.project_repo.add_participant.assert_called_once()
-    project_service.db.commit.assert_called_once()
 
 
 def test_invite_user_already_participant(project_service):
@@ -85,20 +81,19 @@ def test_invite_user_already_participant(project_service):
     project_service.role_repo.get_role_by_id.return_value = Role(id=2, name="Viewer")
     project_service.participant_repo.has_access.return_value = True  # Already in project!
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         project_service.invite_user(project_id=10, current_user=owner, invite_in=invite_in)
 
-    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST
-    assert "already a participant" in exc.value.detail
+    assert "already a participant" in str(exc.value)
 
 
 def test_create_project_missing_role(project_service):
     owner = User(id=1)
     project_service.role_repo.get_role_by_name.return_value = None
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RuntimeError) as exc:
         project_service.create_project(owner=owner, title="Title", description="Desc")
-    assert exc.value.status_code == 500
+    assert "role not found" in str(exc.value)
 
 
 def test_get_projects_success(project_service):
@@ -123,7 +118,6 @@ def test_update_project_success(project_service):
         project_id=10, current_user=user, project_in=update_data
     )
     assert updated.title == "New Title"
-    project_service.db.commit.assert_called_once()
 
 
 def test_update_project_not_found(project_service):
@@ -133,9 +127,9 @@ def test_update_project_not_found(project_service):
     project_service.participant_repo.has_access.return_value = True
     project_service.project_repo.get_by_id.return_value = None  # Not found
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         project_service.update_project(project_id=99, current_user=user, project_in=update_data)
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Project not found" in str(exc.value)
 
 
 def test_delete_project_success(project_service):
@@ -148,7 +142,6 @@ def test_delete_project_success(project_service):
     project_service.delete_project(project_id=10, current_user=user)
 
     project_service.project_repo.delete_project.assert_called_once_with(project)
-    project_service.db.commit.assert_called_once()
 
 
 def test_invite_user_target_not_found(project_service):
@@ -158,9 +151,9 @@ def test_invite_user_target_not_found(project_service):
     project_service.participant_repo.is_owner.return_value = True
     project_service.user_repo.get_user_by_id.return_value = None  # User doesn't exist
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         project_service.invite_user(project_id=10, current_user=owner, invite_in=invite_in)
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "User to invite not found" in str(exc.value)
 
 
 def test_invite_user_role_not_found(project_service):
@@ -171,6 +164,6 @@ def test_invite_user_role_not_found(project_service):
     project_service.user_repo.get_user_by_id.return_value = User(id=2)
     project_service.role_repo.get_role_by_id.return_value = None  # Role doesn't exist
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         project_service.invite_user(project_id=10, current_user=owner, invite_in=invite_in)
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Role not found" in str(exc.value)

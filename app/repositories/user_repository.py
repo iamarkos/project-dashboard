@@ -18,5 +18,8 @@ class UserRepository:
     def get_user_by_email(self, email: str) -> User | None:
         return self.db.query(User).filter(User.email == email).first()
 
-    def add_user(self, user: User) -> None:
+    def add_user(self, user: User) -> User:
         self.db.add(user)
+        self.db.commit()
+        self.db.refresh(user)
+        return user

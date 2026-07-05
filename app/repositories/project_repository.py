@@ -8,12 +8,26 @@ from app.db.models import Project, ProjectParticipant
 class ProjectRepository:
     def __init__(self, db: Session = Depends(get_db)):
         self.db = db
-
-    def add_project(self, project: Project) -> None:
+    
+    def add_project(
+        self, 
+        project: Project, 
+        participant: ProjectParticipant
+    ) -> Project:
+        
+        # Add both to the session
         self.db.add(project)
+        self.db.add(participant)
+        
+        # Commit the transaction once
+        self.db.commit()
+        self.db.refresh(project)
+        
+        return project
 
     def add_participant(self, participant: ProjectParticipant) -> None:
         self.db.add(participant)
+        self.db.commit()
 
     def get_by_id(
         self,
@@ -36,7 +50,10 @@ class ProjectRepository:
     def update(self, project: Project, update_data: dict[str, str]) -> Project:
         for key, value in update_data.items():
             setattr(project, key, value)
+        self.db.commit()
+        self.db.refresh(project)
         return project
 
     def delete_project(self, project: Project) -> None:
         self.db.delete(project)
+        self.db.commit()

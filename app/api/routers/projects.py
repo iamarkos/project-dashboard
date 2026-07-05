@@ -1,6 +1,6 @@
 from typing import Any
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.dependencies import get_current_user, require_project_access
 from app.api.schemas import (
@@ -22,9 +22,12 @@ def create_project(
     current_user: User = Depends(get_current_user),
     service: ProjectService = Depends(),
 ) -> Any:
-    return service.create_project(
-        owner=current_user, title=project_in.title, description=str(project_in.description)
-    )
+    try:
+        return service.create_project(
+            owner=current_user, title=project_in.title, description=str(project_in.description)
+        )
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/", response_model=list[ProjectResponse])
@@ -48,9 +51,14 @@ def update_project(
     current_user: User = Depends(get_current_user),
     service: ProjectService = Depends(),
 ) -> Any:
-    return service.update_project(
-        project_id=project_id, current_user=current_user, project_in=project_in
-    )
+    try:
+        return service.update_project(
+            project_id=project_id, current_user=current_user, project_in=project_in
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -59,8 +67,11 @@ def delete_project(
     current_user: User = Depends(get_current_user),
     service: ProjectService = Depends(),
 ) -> None:
-    service.delete_project(project_id=project_id, current_user=current_user)
-    return
+    try:
+        service.delete_project(project_id=project_id, current_user=current_user)
+        return
+    except PermissionError as e:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
 
 
 @router.post("/{project_id}/invite", response_model=ProjectInviteResponse)
@@ -70,7 +81,11 @@ def invite_user_to_project(
     current_user: User = Depends(get_current_user),
     service: ProjectService = Depends(),
 ) -> Any:
-
-    return service.invite_user(
-        project_id=project_id, current_user=current_user, invite_in=invite_in
-    )
+    try:
+        return service.invite_user(
+            project_id=project_id, current_user=current_user, invite_in=invite_in
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

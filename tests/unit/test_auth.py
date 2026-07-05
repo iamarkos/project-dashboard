@@ -10,12 +10,11 @@ from app.services.auth_service import AuthService
 
 @pytest.fixture
 def auth_service():
-    mock_db = MagicMock()
     mock_user_repo = MagicMock()
     mock_role_repo = MagicMock()
 
     # We mock the security functions to avoid actual hashing overhead in basic unit tests
-    return AuthService(db=mock_db, user_repo=mock_user_repo, role_repo=mock_role_repo)
+    return AuthService(user_repo=mock_user_repo, role_repo=mock_role_repo)
 
 
 def test_register_user_success(auth_service, mocker):
@@ -33,6 +32,7 @@ def test_register_user_success(auth_service, mocker):
     mocker.patch("app.services.auth_service.get_password_hash", return_value="hashed_pw")
 
     # Act
+    auth_service.user_repo.add_user.side_effect = lambda user: user #mock returns user passed to it
     new_user = auth_service.register_user(user_in)
 
     # Assert
@@ -40,8 +40,6 @@ def test_register_user_success(auth_service, mocker):
     assert new_user.email == "test@test.com"
     assert new_user.hashed_password == "hashed_pw"
     auth_service.user_repo.add_user.assert_called_once_with(new_user)
-    auth_service.db.commit.assert_called_once()
-    auth_service.db.refresh.assert_called_once_with(new_user)
 
 
 def test_register_user_missing_default_role(auth_service):
@@ -55,11 +53,9 @@ def test_register_user_missing_default_role(auth_service):
     auth_service.role_repo.get_role_by_name.return_value = None
 
     # Act & Assert
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RuntimeError) as exc:
         auth_service.register_user(user_in)
-
-    assert exc.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "System configuration error" in exc.value.detail
+    assert "System configuration error" in str(exc.value)
 
 
 def test_register_user_email_exists(auth_service):
@@ -74,11 +70,9 @@ def test_register_user_email_exists(auth_service):
     auth_service.user_repo.get_user_by_email.return_value = User(id=1)  # Simulating existing user
 
     # Act & Assert
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         auth_service.register_user(user_in)
-
-    assert exc.value.status_code == status.HTTP_400_BAD_REQUEST
-    assert exc.value.detail == "Email already registered"
+    assert "Email already registered" in str(exc.value)
 
 
 def test_authenticate_user_success(auth_service, mocker):
@@ -102,8 +96,6 @@ def test_authenticate_user_invalid_credentials(auth_service, mocker):
     auth_service.user_repo.get_user_by_username.return_value = None
 
     # Act & Assert
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(PermissionError) as exc:
         auth_service.authenticate_user("wronguser", "wrongpass")
-
-    assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
-    assert exc.value.detail == "Incorrect username or password"
+    assert "Incorrect username or password" in str(exc.value)

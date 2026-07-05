@@ -1,9 +1,5 @@
-from fastapi import Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
 from app.api.schemas import ProjectInvite, ProjectInviteResponse, ProjectUpdate  # Added import
 from app.core.enums import ProjectRole
-from app.db.database import get_db
 from app.db.models import Project, ProjectParticipant, User
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.project_repository import ProjectRepository
@@ -14,13 +10,11 @@ from app.repositories.user_repository import UserRepository
 class ProjectService:
     def __init__(
         self,
-        db: Session = Depends(get_db),
-        project_repo: ProjectRepository = Depends(),
-        participant_repo: ParticipantRepository = Depends(),
-        user_repo: UserRepository = Depends(),
-        role_repo: RoleRepository = Depends(),
+        project_repo: ProjectRepository,
+        participant_repo: ParticipantRepository,
+        user_repo: UserRepository,
+        role_repo: RoleRepository,
     ):
-        self.db = db
         self.project_repo = project_repo
         self.participant_repo = participant_repo
         self.user_repo = user_repo
@@ -32,32 +26,22 @@ class ProjectService:
         title: str,
         description: str,
     ) -> Project:
-
-        # Create and add the project
-        project = Project(title=title, description=description, created_by=owner.id)
-        self.project_repo.add_project(project)
-
-        # Flush to generate the project.id
-        self.db.flush()
-
         # Get the owner role
         owner_role = self.role_repo.get_role_by_name(ProjectRole.OWNER.value)
         if not owner_role:
-            raise HTTPException(status_code=500, detail="Owner role not found in database.")
+            raise RuntimeError("System configurayion error: Owner role not found.")
 
+        # Create the model
+        project = Project(title=title, description=description, created_by=owner.id)
+        
         # Create the participant link
         participant = ProjectParticipant(
             project=project,
             user=owner,
             role=owner_role,
         )
-        self.project_repo.add_participant(participant)
 
-        # Commit the entire operation at once
-        self.db.commit()
-        self.db.refresh(project)
-
-        return project
+        return self.project_repo.add_project(project, participant)
 
     def get_projects(
         self,
@@ -70,39 +54,32 @@ class ProjectService:
     ) -> Project | None:
         user_id = current_user.id
         if not self.participant_repo.has_access(project_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found or you do not have access.",
+            raise PermissionError(
+                "Project not found or you have no access."
             )
 
         project = self.project_repo.get_by_id(project_id)
         if not project:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Project not found.",
+            raise ValueError(
+                "Project not found."
             )
 
         # Apply updates
         update_data = project_in.model_dump(exclude_unset=True)
         updated_project = self.project_repo.update(project, update_data)
 
-        self.db.commit()
-        self.db.refresh(updated_project)
-
-        return updated_project
+        return self.project_repo.update(project, update_data)
 
     def delete_project(self, project_id: int, current_user: User) -> None:
         user_id = current_user.id
         if not self.participant_repo.is_owner(project_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the project owner can delete this project.",
+            raise PermissionError(
+                "Only the project owner can delete this project."
             )
 
         project = self.project_repo.get_by_id(project_id)
         if project:
             self.project_repo.delete_project(project)
-            self.db.commit()
 
     def invite_user(
         self,
@@ -113,25 +90,23 @@ class ProjectService:
         user_id = current_user.id
 
         if not self.participant_repo.is_owner(project_id, user_id):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the project owner can invite users.",
+            raise PermissionError(
+                "Only the project owner can invite users."
             )
 
         user_to_invite = self.user_repo.get_user_by_id(invite_in.user_id)
         if not user_to_invite:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="User to invite not found."
+            raise ValueError(
+                "User to invite not found."
             )
 
         role = self.role_repo.get_role_by_id(invite_in.role_id)
         if not role:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found.")
+            raise ValueError("Role not found.")
 
         if self.participant_repo.has_access(project_id, invite_in.user_id):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already a participant in this project.",
+            raise ValueError(
+                "User is already a participant in this project."
             )
 
         new_participant = ProjectParticipant(
@@ -139,7 +114,6 @@ class ProjectService:
         )
 
         self.project_repo.add_participant(new_participant)
-        self.db.commit()
 
         return ProjectInviteResponse(
             project_id=project_id,

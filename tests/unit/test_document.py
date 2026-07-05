@@ -11,7 +11,6 @@ from app.services.document_service import DocumentService
 @pytest.fixture
 def document_service():
     return DocumentService(
-        db=MagicMock(),
         document_repo=MagicMock(),
     )
 
@@ -33,12 +32,13 @@ def test_upload_document_success(document_service, mocker):
         "app.services.document_service.upload_file_to_storage", return_value="path/to/test.pdf"
     )
 
+    document_service.document_repo.add_document.side_effect = lambda doc: doc
+
     document = document_service.upload_document(project_id=1, current_user=user, file=mock_file)
 
     assert document.filename == "test.pdf"
     assert document.file_size == 1024 * 1024
     document_service.document_repo.add_document.assert_called_once()
-    document_service.db.commit.assert_called_once()
 
 
 def test_upload_document_size_limit_exceeded(document_service, mocker):
@@ -53,11 +53,10 @@ def test_upload_document_size_limit_exceeded(document_service, mocker):
     document_service.document_repo.get_total_project_size.return_value = 5 * 1024 * 1024
     mocker.patch("app.services.document_service.settings.MAX_PROJECT_SIZE_MB", 10)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         document_service.upload_document(project_id=1, current_user=user, file=mock_file)
 
-    assert exc.value.status_code == status.HTTP_413_CONTENT_TOO_LARGE
-    assert "Upload rejected" in exc.value.detail
+    assert "Upload rejected" in str(exc.value)
 
 
 def test_get_download_url_success(document_service, mocker):
@@ -78,10 +77,10 @@ def test_get_download_url_success(document_service, mocker):
 def test_get_download_url_not_found(document_service):
     document_service.document_repo.get_document.return_value = None
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         document_service.get_download_url(project_id=1, document_id=99)
 
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Document not found" in str(exc.value)
 
 
 def test_delete_document_success(document_service, mocker):
@@ -95,7 +94,6 @@ def test_delete_document_success(document_service, mocker):
 
     mock_delete.assert_called_once_with("test-bucket", "path/to/test.pdf")
     document_service.document_repo.delete_document.assert_called_once_with(mock_doc)
-    document_service.db.commit.assert_called_once()
 
 
 def test_list_documents(document_service):
@@ -114,9 +112,9 @@ def test_get_download_url_minio_failure(document_service, mocker):
     # Simulate MinIO failing to generate the URL by returning None
     mocker.patch("app.services.document_service.generate_presigned_url", return_value=None)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RuntimeError) as exc:
         document_service.get_download_url(project_id=1, document_id=1)
-    assert exc.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert "Could not generate" in str(exc.value)
 
 
 def test_update_document_success(document_service):
@@ -125,28 +123,29 @@ def test_update_document_success(document_service):
 
     update_data = DocumentUpdate(filename="new.pdf")
 
+    document_service.document_repo.update_document.return_value = Document(id=1, filename="new.pdf")
+
     updated = document_service.update_document(
         project_id=1, document_id=1, document_update=update_data
     )
     assert updated.filename == "new.pdf"
-    document_service.db.commit.assert_called_once()
 
 
 def test_update_document_not_found(document_service):
     document_service.document_repo.get_document.return_value = None
     update_data = DocumentUpdate(filename="new.pdf")
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         document_service.update_document(project_id=1, document_id=99, document_update=update_data)
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Document not found" in str(exc.value)
 
 
 def test_delete_document_not_found(document_service):
     document_service.document_repo.get_document.return_value = None
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(ValueError) as exc:
         document_service.delete_document(project_id=1, document_id=99)
-    assert exc.value.status_code == status.HTTP_404_NOT_FOUND
+    assert "Document not found" in str(exc.value)
 
 
 def test_delete_document_storage_failure(document_service, mocker):
@@ -160,7 +159,6 @@ def test_delete_document_storage_failure(document_service, mocker):
         "app.services.document_service.delete_file", side_effect=Exception("MinIO Offline")
     )
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(RuntimeError) as exc:
         document_service.delete_document(project_id=1, document_id=1)
-    assert exc.value.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert "Failed to delete file" in exc.value.detail
+    assert "Failed to delete file" in str(exc.value)
