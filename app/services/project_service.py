@@ -52,19 +52,17 @@ class ProjectService:
     def update_project(
         self, project_id: int, current_user: User, project_in: ProjectUpdate
     ) -> Project | None:
-        user_id = current_user.id
-        if not self.participant_repo.has_access(project_id, user_id):
-            raise PermissionError("Project not found or you have no access.")
-
+        
         project = self.project_repo.get_by_id(project_id)
         if not project:
             raise ValueError("Project not found.")
 
+        if not self.participant_repo.has_access(project_id, current_user.id):
+            raise PermissionError("Project not found or you have no access.")
+
         # Apply updates
         update_data = project_in.model_dump(exclude_unset=True)
-        updated_project = self.project_repo.update(project, update_data)
-
-        return updated_project
+        return self.project_repo.update(project, update_data)
 
     def delete_project(self, project_id: int, current_user: User) -> None:
         user_id = current_user.id
@@ -82,6 +80,10 @@ class ProjectService:
         invite_in: ProjectInvite,
     ) -> ProjectInviteResponse:
         user_id = current_user.id
+
+        project = self.project_repo.get_by_id(project_id)
+        if not project:
+            raise ValueError("Project not found.")
 
         if not self.participant_repo.is_owner(project_id, user_id):
             raise PermissionError("Only the project owner can invite users.")

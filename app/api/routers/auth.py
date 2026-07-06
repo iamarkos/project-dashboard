@@ -8,9 +8,16 @@ from app.services.auth_service import AuthService
 
 router = APIRouter(tags=["Authentication"])
 
+from fastapi import Depends
+from sqlalchemy.orm import Session
+from app.db.database import get_db
+from app.repositories.user_repository import UserRepository
+from app.repositories.role_repository import RoleRepository
+from app.services.auth_service import AuthService
+from app.api.dependencies import get_auth_service
 
 @router.post("/auth", response_model=UserResponse)
-def create_user(user: UserCreate, service: AuthService = Depends()) -> Any:
+def create_user(user: UserCreate, service: AuthService = Depends(get_auth_service)) -> Any:
     try:
         return service.register_user(user_in=user)
     except ValueError as e:
@@ -21,7 +28,7 @@ def create_user(user: UserCreate, service: AuthService = Depends()) -> Any:
 
 @router.post("/login")
 def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(), service: AuthService = Depends()
+    form_data: OAuth2PasswordRequestForm = Depends(), service: AuthService = Depends(get_auth_service)
 ) -> dict[str, str]:
     try:
         return service.authenticate_user(username=form_data.username, password=form_data.password)

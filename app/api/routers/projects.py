@@ -12,7 +12,7 @@ from app.api.schemas import (
 )
 from app.db.models import Project, User
 from app.services.project_service import ProjectService
-
+from app.api.dependencies import get_project_service
 router = APIRouter(tags=["Projects"])
 
 
@@ -20,7 +20,7 @@ router = APIRouter(tags=["Projects"])
 def create_project(
     project_in: ProjectCreate,
     current_user: User = Depends(get_current_user),
-    service: ProjectService = Depends(),
+    service: ProjectService = Depends(get_project_service),
 ) -> Any:
     try:
         return service.create_project(
@@ -32,7 +32,7 @@ def create_project(
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_user_projects(
-    current_user: User = Depends(get_current_user), service: ProjectService = Depends()
+    current_user: User = Depends(get_current_user), service: ProjectService = Depends(get_project_service)
 ) -> Any:
     return service.get_projects(current_user)
 
@@ -49,7 +49,7 @@ def update_project(
     project_id: int,
     project_in: ProjectUpdate,
     current_user: User = Depends(get_current_user),
-    service: ProjectService = Depends(),
+    service: ProjectService = Depends(get_project_service),
 ) -> Any:
     try:
         return service.update_project(
@@ -65,7 +65,7 @@ def update_project(
 def delete_project(
     project_id: int,
     current_user: User = Depends(get_current_user),
-    service: ProjectService = Depends(),
+    service: ProjectService = Depends(get_project_service),
 ) -> None:
     try:
         service.delete_project(project_id=project_id, current_user=current_user)
@@ -79,7 +79,7 @@ def invite_user_to_project(
     project_id: int,
     invite_in: ProjectInvite,
     current_user: User = Depends(get_current_user),
-    service: ProjectService = Depends(),
+    service: ProjectService = Depends(get_project_service),
 ) -> Any:
     try:
         return service.invite_user(
@@ -88,4 +88,7 @@ def invite_user_to_project(
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        error_msg = str(e)
+        if "not found" in error_msg.lower():
+            raise HTTPException(status_code=404, detail=error_msg)
+        raise HTTPException(status_code=400, detail=error_msg)
