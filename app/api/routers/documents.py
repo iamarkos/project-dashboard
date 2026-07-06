@@ -7,7 +7,7 @@ from app.api.schemas import DocumentBase, DocumentUpdate
 from app.db.models import Project, User
 from app.services.document_service import DocumentService
 
-router = APIRouter(prefix="/projects/{project_id}/documents", tags=["Documents"])
+router = APIRouter(tags=["Documents"])
 
 
 @router.post("/", response_model=DocumentBase)
@@ -23,6 +23,7 @@ def upload_document_to_project(
         if "Upload rejected" in str(e):
             raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail=str(e))
         raise HTTPException(status_code=400, detail=str(e))
+
 
 @router.get("/", response_model=list[DocumentBase])
 def list_project_documents(
@@ -54,8 +55,8 @@ def update_document(
 ) -> Any:
     try:
         return service.update_document(
-        project_id=project.id, document_id=document_id, document_update=document_update
-    )
+            project_id=project.id, document_id=document_id, document_update=document_update
+        )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

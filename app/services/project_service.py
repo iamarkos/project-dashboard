@@ -33,7 +33,7 @@ class ProjectService:
 
         # Create the model
         project = Project(title=title, description=description, created_by=owner.id)
-        
+
         # Create the participant link
         participant = ProjectParticipant(
             project=project,
@@ -54,28 +54,22 @@ class ProjectService:
     ) -> Project | None:
         user_id = current_user.id
         if not self.participant_repo.has_access(project_id, user_id):
-            raise PermissionError(
-                "Project not found or you have no access."
-            )
+            raise PermissionError("Project not found or you have no access.")
 
         project = self.project_repo.get_by_id(project_id)
         if not project:
-            raise ValueError(
-                "Project not found."
-            )
+            raise ValueError("Project not found.")
 
         # Apply updates
         update_data = project_in.model_dump(exclude_unset=True)
         updated_project = self.project_repo.update(project, update_data)
 
-        return self.project_repo.update(project, update_data)
+        return updated_project
 
     def delete_project(self, project_id: int, current_user: User) -> None:
         user_id = current_user.id
         if not self.participant_repo.is_owner(project_id, user_id):
-            raise PermissionError(
-                "Only the project owner can delete this project."
-            )
+            raise PermissionError("Only the project owner can delete this project.")
 
         project = self.project_repo.get_by_id(project_id)
         if project:
@@ -90,24 +84,18 @@ class ProjectService:
         user_id = current_user.id
 
         if not self.participant_repo.is_owner(project_id, user_id):
-            raise PermissionError(
-                "Only the project owner can invite users."
-            )
+            raise PermissionError("Only the project owner can invite users.")
 
         user_to_invite = self.user_repo.get_user_by_id(invite_in.user_id)
         if not user_to_invite:
-            raise ValueError(
-                "User to invite not found."
-            )
+            raise ValueError("User to invite not found.")
 
         role = self.role_repo.get_role_by_id(invite_in.role_id)
         if not role:
             raise ValueError("Role not found.")
 
         if self.participant_repo.has_access(project_id, invite_in.user_id):
-            raise ValueError(
-                "User is already a participant in this project."
-            )
+            raise ValueError("User is already a participant in this project.")
 
         new_participant = ProjectParticipant(
             project_id=project_id, user_id=invite_in.user_id, role_id=invite_in.role_id

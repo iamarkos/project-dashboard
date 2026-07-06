@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from fastapi import UploadFile
+
 from app.api.schemas import DocumentUpdate
 from app.core.config import settings
 from app.core.storage import delete_file, generate_presigned_url, upload_file_to_storage
@@ -65,15 +66,11 @@ class DocumentService:
     def get_download_url(self, project_id: int, document_id: int) -> dict[str, str]:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise ValueError(
-                "Document not found in this project."
-            )
+            raise ValueError("Document not found in this project.")
 
         url = generate_presigned_url(settings.MINIO_BUCKET_NAME, str(document.file_path))
         if not url:
-            raise RuntimeError(
-                "Could not generate download link."
-            )
+            raise RuntimeError("Could not generate download link.")
 
         return {"download_url": url}
 
@@ -82,24 +79,18 @@ class DocumentService:
     ) -> Document:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise ValueError(
-                "Document not found in this project."
-            )
+            raise ValueError("Document not found in this project.")
 
         return self.document_repo.update_document(document, document_update.filename)
 
     def delete_document(self, project_id: int, document_id: int) -> None:
         document = self.document_repo.get_document(document_id, project_id)
         if not document:
-            raise ValueError(
-                "Document not found in this project."
-            )
+            raise ValueError("Document not found in this project.")
 
         try:
             delete_file(settings.MINIO_BUCKET_NAME, str(document.file_path))
         except Exception:
-            raise RuntimeError(
-                "Failed to delete file from storage."
-            )
+            raise RuntimeError("Failed to delete file from storage.")
 
         self.document_repo.delete_document(document)

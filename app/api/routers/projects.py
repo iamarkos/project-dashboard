@@ -13,7 +13,7 @@ from app.api.schemas import (
 from app.db.models import Project, User
 from app.services.project_service import ProjectService
 
-router = APIRouter(prefix="/projects", tags=["Projects"])
+router = APIRouter(tags=["Projects"])
 
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)

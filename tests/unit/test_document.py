@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException, status
 
 from app.api.schemas import DocumentUpdate
 from app.db.models import Document, User

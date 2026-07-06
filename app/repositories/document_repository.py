@@ -35,12 +35,12 @@ class DocumentRepository:
         )
         return size or 0
 
-    def update_document(self, document:Document, new_filename: str) -> Document:
+    def update_document(self, document: Document, new_filename: str) -> Document:
         setattr(document, "filename", new_filename)
         self.db.commit()
         self.db.refresh(document)
         return document
-    
+
     def delete_document(self, document: Document) -> None:
         self.db.delete(document)
         self.db.commit()

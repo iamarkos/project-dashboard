@@ -1,18 +1,20 @@
-from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import auth, documents, projects
-from app.db.database import Base, SessionLocal, engine
+from app.db.database import SessionLocal, engine, Base
 from app.db.models import Role
-
-Base.metadata.create_all(bind=engine)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # This runs once when the app starts
+    # 1. Create all tables in the database (replaces Alembic)
+    Base.metadata.create_all(bind=engine)
+
+    # 2. Seed the required roles into the newly created tables
     db = SessionLocal()
     try:
         for role_name in ["Owner", "Participant"]:
@@ -21,21 +23,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         db.commit()
     finally:
         db.close()
+
     yield
 
 
-app = FastAPI(
-    title="Project Management Dashboard API",
-    description="API for managing projects.",
-    lifespan=lifespan,
-)
+def register_middlewares(app: FastAPI) -> None:
+    """Register all middlewares."""
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Plug the router into the main application
-app.include_router(auth.router)
-app.include_router(projects.router)
-app.include_router(documents.router)
+
+def register_routers(app: FastAPI) -> None:
+    """
+    Register all routers.
+    """
+    app.include_router(auth.router)
+    app.include_router(projects.router, prefix="/projects")
+    app.include_router(documents.router, prefix="/projects/{project_id}/documents")
 
 
-@app.get("/")
-def read_root() -> dict[str, str]:
-    return {"status": "success", "message": "API and Database are successfully connected!"}
+def create_app() -> FastAPI:
+    """Main application factory."""
+
+    app = FastAPI(title="Project Management API", version="1.0.0", lifespan=lifespan)
+
+    # Call the register functions
+    register_middlewares(app)
+    register_routers(app)
+
+    return app
+
+
+app = create_app()

@@ -1,7 +1,6 @@
 from unittest.mock import MagicMock
 
 import pytest
-from fastapi import HTTPException, status
 
 from app.api.schemas import UserCreate
 from app.db.models import Role, User
@@ -32,7 +31,9 @@ def test_register_user_success(auth_service, mocker):
     mocker.patch("app.services.auth_service.get_password_hash", return_value="hashed_pw")
 
     # Act
-    auth_service.user_repo.add_user.side_effect = lambda user: user #mock returns user passed to it
+    auth_service.user_repo.add_user.side_effect = lambda user: (
+        user
+    )  # mock returns user passed to it
     new_user = auth_service.register_user(user_in)
 
     # Assert

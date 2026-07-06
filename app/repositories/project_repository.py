@@ -8,21 +8,17 @@ from app.db.models import Project, ProjectParticipant
 class ProjectRepository:
     def __init__(self, db: Session = Depends(get_db)):
         self.db = db
-    
-    def add_project(
-        self, 
-        project: Project, 
-        participant: ProjectParticipant
-    ) -> Project:
-        
+
+    def add_project(self, project: Project, participant: ProjectParticipant) -> Project:
+
         # Add both to the session
         self.db.add(project)
         self.db.add(participant)
-        
+
         # Commit the transaction once
         self.db.commit()
         self.db.refresh(project)
-        
+
         return project
 
     def add_participant(self, participant: ProjectParticipant) -> None:

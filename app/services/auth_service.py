@@ -25,9 +25,7 @@ class AuthService:
         # Check if the email exists
         existing_user = self.user_repo.get_user_by_email(user_in.email)
         if existing_user:
-            raise ValueError(
-                "Email already registered"
-            )
+            raise ValueError("Email already registered")
 
         # Hash the password
         hashed_pw = get_password_hash(user_in.password)
@@ -42,9 +40,7 @@ class AuthService:
 
         # Verify user exists and password matches
         if not user or not verify_password(password, str(user.hashed_password)):
-            raise PermissionError(
-                "Incorrect username or password"
-            )
+            raise PermissionError("Incorrect username or password")
 
         # Generate JWT
         access_token = create_access_token(data={"sub": str(user.id)})
