@@ -1,3 +1,4 @@
+import os
 import uuid
 from typing import BinaryIO
 
@@ -7,26 +8,34 @@ from fastapi import HTTPException, status
 
 from app.core.config import settings
 
-# Pulling directly from the .env variables injected by Docker Compose
-MINIO_ENDPOINT = settings.MINIO_ENDPOINT
-MINIO_ACCESS_KEY = settings.MINIO_ROOT_USER
-MINIO_SECRET_KEY = settings.MINIO_ROOT_PASSWORD
+# Pulling the bucket name from settings
 BUCKET_NAME = settings.MINIO_BUCKET_NAME
 
-# Initialize the S3 client pointing to our local MinIO
-s3_client = boto3.client(
-    "s3",
-    endpoint_url=MINIO_ENDPOINT,
-    aws_access_key_id=MINIO_ACCESS_KEY,
-    aws_secret_access_key=MINIO_SECRET_KEY,
-    region_name="us-east-1",
-)
+# Check the current running environment (injected as "production" in ECS)
+ENV = os.getenv("ENV", "development")
+
+# Initialize the S3 client conditionally based on the environment
+if ENV == "production":
+    # AWS Production: Connect natively to real AWS S3.
+    s3_client = boto3.client(
+        "s3",
+        region_name="us-east-1",
+    )
+else:
+    # Local Development: Point directly to the containerized MinIO server
+    s3_client = boto3.client(
+        "s3",
+        endpoint_url=settings.MINIO_ENDPOINT,
+        aws_access_key_id=settings.MINIO_ROOT_USER,
+        aws_secret_access_key=settings.MINIO_ROOT_PASSWORD,
+        region_name="us-east-1",
+    )
 
 
 def ensure_bucket_exists() -> None:
     """
-    Checks if the bucket exists in MinIO.
-    If it throws a 404 Not Found error, it creates the bucket automatically.
+    Checks if the bucket exists.
+    If it throws a 404 Not Found error locally, it creates the bucket automatically.
     """
     try:
         s3_client.head_bucket(Bucket=BUCKET_NAME)
@@ -41,7 +50,7 @@ def ensure_bucket_exists() -> None:
 
 def upload_file_to_storage(file_obj: BinaryIO, bucket_name: str, original_filename: str) -> str:
     """
-    Streams a file object directly to MinIO and returns the unique storage key.
+    Streams a file object directly to storage and returns the unique storage key.
     """
     ensure_bucket_exists()
 
@@ -62,7 +71,7 @@ def upload_file_to_storage(file_obj: BinaryIO, bucket_name: str, original_filena
 
 def generate_presigned_url(bucket_name: str, storage_key: str, expiration: int = 3600) -> str:
     """
-    Generates a presigned URL for downloading a file from MinIO.
+    Generates a presigned URL for downloading a file.
     """
     try:
         url = s3_client.generate_presigned_url(
@@ -79,7 +88,7 @@ def generate_presigned_url(bucket_name: str, storage_key: str, expiration: int =
 
 def delete_file(bucket_name: str, storage_key: str) -> None:
     """
-    Deletes an object from an S3 bucket.
+    Deletes an object from a storage bucket.
     """
     try:
         s3_client.delete_object(Bucket=bucket_name, Key=storage_key)

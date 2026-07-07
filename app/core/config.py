@@ -5,6 +5,7 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "password"
     POSTGRES_DB: str = "dashboard_db"
+    POSTGRES_HOST: str = "db"
 
     SECRET_KEY: str = "supersecret"
     ALGORITHM: str = "HS256"

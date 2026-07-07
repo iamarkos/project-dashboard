@@ -29,7 +29,7 @@ class ProjectRepository:
         self,
         project_id: int,
     ) -> Project | None:
-        return self.db.query(Project).filter(Project.id == project_id).first()
+        return self.db.query(Project).options(selectinload(Project.documents)).filter(Project.id == project_id).first()
 
     def list_for_user(
         self,
