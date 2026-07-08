@@ -28,7 +28,7 @@ jobs:
           pip install uv
           
           # Install testing tools
-          uv pip install --system ruff pytest mypy
+          uv pip install --system ruff pytest pytest-mock mypy
           
           # Install your app dependencies from pyproject.toml
           uv pip install --system -e .
