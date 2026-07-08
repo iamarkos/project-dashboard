@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routers import auth, documents, projects
-from app.db.database import SessionLocal, engine, Base
+from app.db.database import Base, SessionLocal, engine
 from app.db.models import Role
 
 

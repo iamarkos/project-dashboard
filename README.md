@@ -8,10 +8,28 @@
   * **Participant:** User invited to the project, can modify, cannot delete.
 
 ## Architecture & Choices
-* **Database:** PostgreSQL. Structured in 3NF (e.g., extracting participant roles into a dedicated `roles` enum table).
+* **Database:** PostgreSQL. 
 * **ORM & DB Access:** SQLAlchemy 2.0. The application strictly follows a **Layered Architecture**. Database queries are encapsulated within **Repositories**, while business logic and validations are handled by **Services**. FastAPI routers act only as the HTTP entry points, ensuring a highly decoupled and testable system.
 * **Auth:** FastAPI `OAuth2PasswordBearer`, JWT (PyJWT), and password hashing via `passlib` (bcrypt).
-* **Files:** Object storage managed via MinIO (S3-compatible API) running in a Docker container, architected for a seamless future migration to AWS S3. File metadata is tracked in the database.
+* **Files:** Object storage managed via MinIO (S3-compatible API) for local development, with production environments fully utilizing native **AWS S3** via IAM roles. File metadata is tracked securely in the database.
+* **Deployment:** Containerized via Docker. Production environment is orchestrated using AWS ECS (backed by an EC2 instance to remain within the AWS Free Tier), connecting to a managed Amazon RDS PostgreSQL instance.
+
+### Database Architecture & Design
+This project utilizes a relational database structure designed with PostgreSQL and managed via SQLAlchemy ORM. The architecture prioritizes data integrity and strictly follows normalization principles to minimize redundancy.
+
+**Entity Relationship & Normalization**
+The database is structured in **Third Normal Form (3NF)** to ensure robust data consistency:
+* **Users Table:** Holds core user authentication data.
+* **Projects Table:** Contains project-specific metadata, linked to the creator/owner.
+* **Roles Table:** Extracts participant roles into a dedicated enum table.
+* **Documents Table:** Stores file metadata (including unique S3 object paths). It maintains a strict Many-to-One relationship with the `Projects` table via a foreign key constraint (`project_id`).
+
+By normalizing the `Documents` schema into its own table rather than embedding file arrays inside the project entity, we ensure:
+1. **Data Integrity:** Orphaned files are avoided, and updating file attributes doesn't affect core project metadata.
+2. **Storage Optimization:** Database records remain lightweight and predictable, keeping binary or string-heavy file paths isolated.
+
+**Query Optimization & Loading Strategy**
+To balance normalization with application performance, the API implements explicit relationship loading strategies. Instead of relying on standard lazy-loading (which can cause silent data omissions or lead to the classic N+1 query problem), heavy operations like project deletion utilize explicit loading (`selectinload`). This efficiently fetches and processes cascading records (like deleting corresponding S3 objects) in an optimized database round-trip.
 
 ## Quick Start (Local Development)
 

@@ -2,7 +2,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
-from app.api.dependencies import get_current_user, require_project_access, get_document_service
+from app.api.dependencies import get_current_user, get_document_service, require_project_access
 from app.api.schemas import DocumentBase, DocumentUpdate
 from app.db.models import Project, User
 from app.services.document_service import DocumentService
@@ -27,7 +27,8 @@ def upload_document_to_project(
 
 @router.get("/", response_model=list[DocumentBase])
 def list_project_documents(
-    project: Project = Depends(require_project_access), service: DocumentService = Depends(get_document_service)
+    project: Project = Depends(require_project_access),
+    service: DocumentService = Depends(get_document_service),
 ) -> Any:
     return service.list_documents(project_id=project.id)
 

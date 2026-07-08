@@ -2,7 +2,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.dependencies import get_current_user, require_project_access
+from app.api.dependencies import get_current_user, get_project_service, require_project_access
 from app.api.schemas import (
     ProjectCreate,
     ProjectInvite,
@@ -12,7 +12,7 @@ from app.api.schemas import (
 )
 from app.db.models import Project, User
 from app.services.project_service import ProjectService
-from app.api.dependencies import get_project_service
+
 router = APIRouter(tags=["Projects"])
 
 
@@ -32,7 +32,8 @@ def create_project(
 
 @router.get("/", response_model=list[ProjectResponse])
 def get_user_projects(
-    current_user: User = Depends(get_current_user), service: ProjectService = Depends(get_project_service)
+    current_user: User = Depends(get_current_user),
+    service: ProjectService = Depends(get_project_service),
 ) -> Any:
     return service.get_projects(current_user)
 

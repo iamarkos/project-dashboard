@@ -1,12 +1,13 @@
 from app.api.schemas import ProjectInvite, ProjectInviteResponse, ProjectUpdate  # Added import
+from app.core.config import settings
 from app.core.enums import ProjectRole
+from app.core.storage import delete_file
 from app.db.models import Project, ProjectParticipant, User
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.project_repository import ProjectRepository
 from app.repositories.role_repository import RoleRepository
 from app.repositories.user_repository import UserRepository
-from app.core.storage import delete_file
-from app.core.config import settings
+
 
 class ProjectService:
     def __init__(
@@ -53,7 +54,7 @@ class ProjectService:
     def update_project(
         self, project_id: int, current_user: User, project_in: ProjectUpdate
     ) -> Project | None:
-        
+
         project = self.project_repo.get_by_id(project_id)
         if not project:
             raise ValueError("Project not found.")
@@ -73,13 +74,13 @@ class ProjectService:
         project = self.project_repo.get_by_id(project_id)
         if project:
             documents = getattr(project, "documents", [])
-            
+
             for doc in documents:
                 try:
                     delete_file(settings.MINIO_BUCKET_NAME, doc.file_path)
                 except Exception:
                     pass
-            
+
             self.project_repo.delete_project(project)
 
     def invite_user(
