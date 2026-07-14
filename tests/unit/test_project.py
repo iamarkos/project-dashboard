@@ -56,28 +56,28 @@ def test_delete_project_not_owner(project_service):
 
 def test_invite_user_success(project_service):
     owner = User(id=1)
-    invite_in = ProjectInvite(user_id=2, role_id=2)
+    invite_in = ProjectInvite(user_id=2)
 
     project_service.participant_repo.is_owner.return_value = True
     project_service.user_repo.get_user_by_id.return_value = User(id=2)
-    project_service.role_repo.get_role_by_id.return_value = Role(id=2, name="Viewer")
+    project_service.role_repo.get_role_by_name.return_value = Role(id=2, name="Participant")
     project_service.participant_repo.has_access.return_value = False  # Not already in project
 
     response = project_service.invite_user(project_id=10, current_user=owner, invite_in=invite_in)
 
     assert response.project_id == 10
     assert response.user_id == 2
-    assert response.role_name == "Viewer"
+    assert response.role_name == "Participant"
     project_service.project_repo.add_participant.assert_called_once()
 
 
 def test_invite_user_already_participant(project_service):
     owner = User(id=1)
-    invite_in = ProjectInvite(user_id=2, role_id=2)
+    invite_in = ProjectInvite(user_id=2)
 
     project_service.participant_repo.is_owner.return_value = True
     project_service.user_repo.get_user_by_id.return_value = User(id=2)
-    project_service.role_repo.get_role_by_id.return_value = Role(id=2, name="Viewer")
+    project_service.role_repo.get_role_by_id.return_value = Role(id=2, name="Participant")
     project_service.participant_repo.has_access.return_value = True  # Already in project!
 
     with pytest.raises(ValueError) as exc:
@@ -145,7 +145,7 @@ def test_delete_project_success(project_service):
 
 def test_invite_user_target_not_found(project_service):
     owner = User(id=1)
-    invite_in = ProjectInvite(user_id=99, role_id=2)
+    invite_in = ProjectInvite(user_id=99)
 
     project_service.participant_repo.is_owner.return_value = True
     project_service.user_repo.get_user_by_id.return_value = None  # User doesn't exist
@@ -157,11 +157,11 @@ def test_invite_user_target_not_found(project_service):
 
 def test_invite_user_role_not_found(project_service):
     owner = User(id=1)
-    invite_in = ProjectInvite(user_id=2, role_id=99)
+    invite_in = ProjectInvite(user_id=2)
 
     project_service.participant_repo.is_owner.return_value = True
     project_service.user_repo.get_user_by_id.return_value = User(id=2)
-    project_service.role_repo.get_role_by_id.return_value = None  # Role doesn't exist
+    project_service.role_repo.get_role_by_name.return_value = None  # Role doesn't exist
 
     with pytest.raises(ValueError) as exc:
         project_service.invite_user(project_id=10, current_user=owner, invite_in=invite_in)

@@ -8,13 +8,13 @@ from pydantic import BaseModel, ConfigDict, EmailStr, model_validator
 # ==========================
 
 
-# 1. The Base: Properties shared across all user actions
+# Properties shared across all user actions
 class UserBase(BaseModel):
     username: str
     email: EmailStr
 
 
-# 2. The Request (Create): What we expect the user to send us
+# The Request (Create)
 class UserCreate(UserBase):
     password: str
     repeat_password: str
@@ -26,7 +26,11 @@ class UserCreate(UserBase):
         return self
 
 
-# 3. The Response: What we send back to the user
+class UserLogin(BaseModel):
+    username: str
+    password: str
+
+
 class UserResponse(UserBase):
     id: int
     # SQLAlchemy model, not just a standard Python dictionary
@@ -93,7 +97,6 @@ class ProjectUpdate(BaseModel):
 
 class ProjectInvite(BaseModel):
     user_id: int
-    role_id: int
 
 
 class ProjectInviteResponse(BaseModel):

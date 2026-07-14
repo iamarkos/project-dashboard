@@ -1,5 +1,5 @@
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 
@@ -19,7 +19,7 @@ from app.services.auth_service import AuthService
 from app.services.document_service import DocumentService
 from app.services.project_service import ProjectService
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+token_auth_scheme = HTTPBearer()
 
 
 # ==========================================
@@ -49,7 +49,8 @@ def get_document_repo(db: Session = Depends(get_db)) -> DocumentRepository:
 # 2. AUTH & AUTHORIZATION DEPENDENCIES
 # ==========================================
 def get_current_user(
-    token: str = Depends(oauth2_scheme), user_repo: UserRepository = Depends(get_user_repo)
+    credentials: HTTPAuthorizationCredentials = Depends(token_auth_scheme),
+    user_repo: UserRepository = Depends(get_user_repo),
 ) -> User:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -57,6 +58,7 @@ def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
+        token = credentials.credentials
         payload = decode_access_token(token)
         user_id = payload.get("sub")
         if user_id is None:

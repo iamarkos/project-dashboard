@@ -1,10 +1,9 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.dependencies import get_auth_service
-from app.api.schemas import UserCreate, UserResponse
+from app.api.schemas import UserCreate, UserLogin, UserResponse
 from app.services.auth_service import AuthService
 
 router = APIRouter(tags=["Authentication"])
@@ -22,11 +21,13 @@ def create_user(user: UserCreate, service: AuthService = Depends(get_auth_servic
 
 @router.post("/login")
 def login_for_access_token(
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    credentials: UserLogin,
     service: AuthService = Depends(get_auth_service),
 ) -> dict[str, str]:
     try:
-        return service.authenticate_user(username=form_data.username, password=form_data.password)
+        return service.authenticate_user(
+            username=credentials.username, password=credentials.password
+        )
     except PermissionError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

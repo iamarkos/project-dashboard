@@ -102,7 +102,7 @@ class ProjectService:
         if not user_to_invite:
             raise ValueError("User to invite not found.")
 
-        role = self.role_repo.get_role_by_id(invite_in.role_id)
+        role = self.role_repo.get_role_by_name(ProjectRole.PARTICIPANT.value)
         if not role:
             raise ValueError("Role not found.")
 
@@ -110,7 +110,7 @@ class ProjectService:
             raise ValueError("User is already a participant in this project.")
 
         new_participant = ProjectParticipant(
-            project_id=project_id, user_id=invite_in.user_id, role_id=invite_in.role_id
+            project_id=project_id, user_id=invite_in.user_id, role_id=role.id
         )
 
         self.project_repo.add_participant(new_participant)

@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from fastapi import HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
 from jwt.exceptions import InvalidTokenError
 
 from app.api.dependencies import get_current_user, require_owner, require_project_access
@@ -12,38 +13,49 @@ def test_get_current_user_success(mocker):
     mock_repo = MagicMock()
     mock_user = User(id=1, username="testuser")
     mock_repo.get_user_by_id.return_value = mock_user
-
+    mock_credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials="valid_token_string"
+    )
     mocker.patch("app.api.dependencies.decode_access_token", return_value={"sub": "1"})
 
-    user = get_current_user(token="valid_token", user_repo=mock_repo)
+    user = get_current_user(credentials=mock_credentials, user_repo=mock_repo)
     assert user.id == 1
 
 
 def test_get_current_user_invalid_token(mocker):
     mock_repo = MagicMock()
+    mock_credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials="valid_token_string"
+    )
     mocker.patch("app.api.dependencies.decode_access_token", side_effect=InvalidTokenError)
 
     with pytest.raises(HTTPException) as exc:
-        get_current_user(token="invalid_token", user_repo=mock_repo)
+        get_current_user(credentials=mock_credentials, user_repo=mock_repo)
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_current_user_missing_sub(mocker):
     mock_repo = MagicMock()
+    mock_credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials="valid_token_string"
+    )
     mocker.patch("app.api.dependencies.decode_access_token", return_value={})  # No 'sub'
 
     with pytest.raises(HTTPException) as exc:
-        get_current_user(token="token", user_repo=mock_repo)
+        get_current_user(credentials=mock_credentials, user_repo=mock_repo)
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
 
 
 def test_get_current_user_not_found(mocker):
     mock_repo = MagicMock()
+    mock_credentials = HTTPAuthorizationCredentials(
+        scheme="Bearer", credentials="valid_token_string"
+    )
     mock_repo.get_user_by_id.return_value = None
     mocker.patch("app.api.dependencies.decode_access_token", return_value={"sub": "99"})
 
     with pytest.raises(HTTPException) as exc:
-        get_current_user(token="token", user_repo=mock_repo)
+        get_current_user(credentials=mock_credentials, user_repo=mock_repo)
     assert exc.value.status_code == status.HTTP_401_UNAUTHORIZED
 
 
